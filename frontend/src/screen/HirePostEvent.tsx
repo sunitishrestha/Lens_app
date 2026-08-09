@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   View,
   Text,
@@ -62,17 +63,28 @@ export interface CreateEventPayload {
 interface HirePostEventProps {
   onPostEvent?: (payload: CreateEventPayload) => void;
   onCancel?: () => void;
+  onPostJob?: () => void;
+  onNavigateHome?: () => void;
+  onNavigatePost?: () => void;
+  onNavigateProfile?: () => void;
 }
 
 export default function HirePostEvent({
   onPostEvent,
   onCancel,
+  onNavigateHome,
+  onNavigatePost,
+  onNavigateProfile,
 }: HirePostEventProps) {
   const [eventType, setEventType] = useState("Wedding");
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [dateObj, setDateObj] = useState(new Date());
+  const [timeObj, setTimeObj] = useState(new Date());
   const [peopleRequired, setPeopleRequired] = useState("1");
   const [budget, setBudget] = useState("");
   const [gearRequirements, setGearRequirements] = useState<string[]>([]);
@@ -96,6 +108,31 @@ export default function HirePostEvent({
     onCancel?.();
   };
 
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setDateObj(selectedDate);
+      const formatted = `${(selectedDate.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${selectedDate
+        .getDate()
+        .toString()
+        .padStart(2, "0")}/${selectedDate.getFullYear()}`;
+      setDate(formatted);
+    }
+  };
+
+  const onTimeChange = (event: any, selectedTime?: Date) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      setTimeObj(selectedTime);
+      let hours = selectedTime.getHours();
+      const minutes = selectedTime.getMinutes().toString().padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      setTime(`${hours}:${minutes} ${ampm}`);
+    }
+  };
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
@@ -182,30 +219,50 @@ export default function HirePostEvent({
         <View style={styles.rowSplit}>
           <View style={styles.halfField}>
             <Text style={styles.fieldLabel}>DATE</Text>
-            <View style={styles.lightInputRow}>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                placeholder="mm/dd/yyyy"
-                placeholderTextColor="#8A93A6"
-                style={styles.lightInput}
-              />
+            <TouchableOpacity
+              style={styles.lightInputRow}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.lightInput, !date && { color: "#8A93A6" }]}>
+                {date || "mm/dd/yyyy"}
+              </Text>
               <Ionicons name="calendar-outline" size={16} color={COLORS.bg} />
-            </View>
+            </TouchableOpacity>
           </View>
           <View style={styles.halfField}>
             <Text style={styles.fieldLabel}>TIME</Text>
-            <View style={styles.lightInputRow}>
-              <TextInput
-                value={time}
-                onChangeText={setTime}
-                placeholder="--:-- --"
-                placeholderTextColor="#8A93A6"
-                style={styles.lightInput}
-              />
+            <TouchableOpacity
+              style={styles.lightInputRow}
+              onPress={() => setShowTimePicker(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.lightInput, !time && { color: "#8A93A6" }]}>
+                {time || "--:-- --"}
+              </Text>
               <Ionicons name="time-outline" size={16} color={COLORS.bg} />
-            </View>
+            </TouchableOpacity>
           </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={dateObj}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+
+          {showTimePicker && (
+            <DateTimePicker
+              value={timeObj}
+              mode="time"
+              display="default"
+              onChange={onTimeChange}
+              is24Hour={false}
+            />
+          )}
         </View>
 
         {/* Capacity & Compensation */}
@@ -299,10 +356,18 @@ export default function HirePostEvent({
 
       {/* Bottom Tab Bar */}
       <View style={styles.tabBar}>
-        <TabItem icon="home-outline" label="Home" />
-        <TabItem icon="add-circle" label="Post" active />
-        <TabItem icon="search-outline" label="Discover" />
-        <TabItem icon="person-outline" label="Profile" />
+        <TabItem icon="home-outline" label="Home" onPress={onNavigateHome} />
+        <TabItem
+          icon="add-circle"
+          label="Post"
+          onPress={onNavigatePost}
+          active
+        />
+        <TabItem
+          icon="person-outline"
+          label="Profile"
+          onPress={onNavigateProfile}
+        />
       </View>
     </View>
   );
@@ -312,11 +377,16 @@ interface TabItemProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   active?: boolean;
+  onPress?: () => void;
 }
 
-function TabItem({ icon, label, active }: TabItemProps) {
+function TabItem({ icon, label, active, onPress }: TabItemProps) {
   return (
-    <TouchableOpacity style={styles.tabItem}>
+    <TouchableOpacity
+      style={styles.tabItem}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       <Ionicons
         name={icon}
         size={22}

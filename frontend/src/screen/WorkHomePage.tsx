@@ -197,6 +197,11 @@ export default function WorkHomepage({
       <View style={styles.tabBar}>
         <TabItem icon="grid" label="Feed" active onPress={onNavigateHome} />
         <TabItem
+          icon="briefcase-outline"
+          label="My Job"
+          onPress={onNavigateApply}
+        />
+        <TabItem
           icon="person-outline"
           label="Profile"
           onPress={onNavigateProfile}

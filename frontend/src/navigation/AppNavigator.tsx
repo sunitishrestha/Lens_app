@@ -47,6 +47,9 @@ export default function AppNavigator() {
           <HirePostEvent
             onCancel={() => setHireRoute("home")}
             onPostEvent={() => setHireRoute("home")}
+            onNavigateHome={() => setHireRoute("home")}
+            onNavigatePost={() => setHireRoute("post")}
+            onNavigateProfile={() => setHireRoute("profile")}
           />
         ) : hireRoute === "profile" ? (
           <HireProfileScreen
@@ -77,6 +80,9 @@ export default function AppNavigator() {
         <WorkApplyScreen
           onCancel={() => setWorkRoute("home")}
           onSubmit={() => setWorkRoute("home")}
+          onNavigateHome={() => setWorkRoute("home")}
+          onNavigateApply={() => setWorkRoute("apply")}
+          onNavigateProfile={() => setWorkRoute("profile")}
         />
       ) : workRoute === "profile" ? (
         <WorkProfileScreen

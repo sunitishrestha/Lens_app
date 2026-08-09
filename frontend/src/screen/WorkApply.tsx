@@ -32,6 +32,9 @@ interface ApplyJobScreenProps {
     confirmedAvailability: boolean;
     equipment: string[];
   }) => void;
+  onNavigateHome?: () => void;
+  onNavigateApply?: () => void;
+  onNavigateProfile?: () => void;
 }
 
 export default function ApplyJobScreen({
@@ -41,6 +44,9 @@ export default function ApplyJobScreen({
   eventImage = "https://images.unsplash.com/photo-1519741497674-611481863552?w=800",
   onCancel,
   onSubmit,
+  onNavigateHome,
+  onNavigateApply,
+  onNavigateProfile,
 }: ApplyJobScreenProps) {
   const [portfolioLink, setPortfolioLink] = useState("");
   const [message, setMessage] = useState("");
@@ -211,10 +217,18 @@ export default function ApplyJobScreen({
 
       {/* Bottom Tab Bar */}
       <View style={styles.tabBar}>
-        <TabItem icon="grid" label="Feed" />
-        <TabItem icon="briefcase" label="My Jobs" active />
-        <TabItem icon="camera-outline" label="Equipment" />
-        <TabItem icon="person-outline" label="Profile" />
+        <TabItem icon="home-outline" label="Home" onPress={onNavigateHome} />
+        <TabItem
+          icon="briefcase"
+          label="My Jobs"
+          active
+          onPress={onNavigateApply}
+        />
+        <TabItem
+          icon="person-outline"
+          label="Profile"
+          onPress={onNavigateProfile}
+        />
       </View>
     </View>
   );
@@ -224,11 +238,12 @@ interface TabItemProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   active?: boolean;
+  onPress?: () => void;
 }
 
-function TabItem({ icon, label, active }: TabItemProps) {
+function TabItem({ icon, label, active, onPress }: TabItemProps) {
   return (
-    <TouchableOpacity style={styles.tabItem}>
+    <TouchableOpacity style={styles.tabItem} onPress={onPress}>
       <Ionicons
         name={icon}
         size={22}
