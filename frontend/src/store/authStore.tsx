@@ -1,31 +1,44 @@
-import { createContext, useContext, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
-import type { AuthResponse, User } from '../api/auth';
+// authStore.tsx
+import { create } from "zustand";
+import * as SecureStore from "expo-secure-store";
+import { getCurrentUser, User, AuthResponse } from "../api/auth";
 
-type AuthStore = {
-  accessToken: string | null;
+type AuthState = {
   user: User | null;
-  signIn: (session: AuthResponse) => void;
-  signOut: () => void;
+  accessToken: string | null;
+  isLoading: boolean;
+  login: (response: AuthResponse) => Promise<void>;
+  logout: () => Promise<void>;
+  restoreSession: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthStore | undefined>(undefined);
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  accessToken: null,
+  isLoading: true,
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<AuthResponse | null>(null);
+  login: async (response) => {
+    await SecureStore.setItemAsync("access_token", response.access_token);
+    set({ user: response.user, accessToken: response.access_token });
+  },
 
-  const value = useMemo<AuthStore>(() => ({
-    accessToken: session?.access_token ?? null,
-    user: session?.user ?? null,
-    signIn: setSession,
-    signOut: () => setSession(null),
-  }), [session]);
+  logout: async () => {
+    await SecureStore.deleteItemAsync("access_token");
+    set({ user: null, accessToken: null });
+  },
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthStore {
-  const store = useContext(AuthContext);
-  if (!store) throw new Error('useAuth must be used inside AuthProvider.');
-  return store;
-}
+  restoreSession: async () => {
+    try {
+      const token = await SecureStore.getItemAsync("access_token");
+      if (!token) {
+        set({ isLoading: false });
+        return;
+      }
+      const user = await getCurrentUser(token);
+      set({ user, accessToken: token, isLoading: false });
+    } catch {
+      await SecureStore.deleteItemAsync("access_token");
+      set({ user: null, accessToken: null, isLoading: false });
+    }
+  },
+}));

@@ -8,18 +8,18 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { loginUser } from "../api/auth";
-import { useAuth } from "../store/authStore";
+import { useAuthStore } from "../store/authStore";
+import { AuthStackParamList } from "../navigation/types";
 
-type LoginScreenProps = {
-  onRegister: () => void;
-};
+type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, "Login">;
 
-export default function LoginScreen({ onRegister }: LoginScreenProps) {
+export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { signIn } = useAuth();
+  const { login } = useAuthStore();
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -29,9 +29,12 @@ export default function LoginScreen({ onRegister }: LoginScreenProps) {
     setIsSubmitting(true);
     try {
       const response = await loginUser({ email: email.trim(), password });
-      signIn(response);
+      login(response);
     } catch (error) {
-      Alert.alert("Login failed", error instanceof Error ? error.message : "Please try again.");
+      Alert.alert(
+        "Login failed",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -119,7 +122,7 @@ export default function LoginScreen({ onRegister }: LoginScreenProps) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={onRegister}>
+        <TouchableOpacity onPress={() => navigation.navigate("Register")}>
           <Text style={styles.footerLink}>
             Don't have an account? <Text style={styles.linkText}>Sign Up</Text>
           </Text>

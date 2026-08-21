@@ -1,35 +1,42 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.dependencies import get_current_user
-from app.models import User
-from app.schemas import AuthResponse, LoginRequest, RegisterRequest, UserResponse
-from app.security import create_access_token, hash_password, verify_password
+from app.db.session import get_db
+from app.models.user import User
+from app.schemas.auth import RegisterPayload, LoginPayload, AuthResponse, UserOut
+from app.core.security import hash_password, verify_password, create_access_token
+from app.core.deps import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
+@router.post("/register", response_model=UserOut)
+async def register(payload: RegisterPayload, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == payload.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> User:
-    email = payload.email.lower()
-    if db.scalar(select(User).where(User.email == email)):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account already exists for this email")
-    user = User(full_name=payload.full_name.strip(), email=email, password_hash=hash_password(payload.password), role=payload.role)
+    user = User(
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        full_name=payload.full_name,
+        role=payload.role,
+    )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
-
 @router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
-    user = db.scalar(select(User).where(User.email == payload.email.lower()))
-    if user is None or not verify_password(payload.password, user.password_hash):
+async def login(payload: LoginPayload, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
-    return AuthResponse(access_token=create_access_token(user.id), user=user)
 
+    token = create_access_token({"sub": str(user.id)})
+    return AuthResponse(access_token=token, user=user)
 
-@router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)) -> User:
+@router.get("/me", response_model=UserOut)
+async def me(current_user: User = Depends(get_current_user)):
     return current_user

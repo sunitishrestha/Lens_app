@@ -50,6 +50,16 @@ const APPLICANTS = [
   },
 ];
 
+interface HireJobApplicantProps {
+  jobTitle?: string;
+  jobDate?: string;
+  jobLocation?: string;
+  applicantCount?: number;
+  budget?: string;
+  onViewProfile?: (applicantId: string) => void;
+  onSelectHire?: (applicantId: string) => void;
+}
+
 export default function HireJobapplicat({
   jobTitle = "Wedding Shoot: Estate Ceremony",
   jobDate = "JUNE 14, 2024",
@@ -58,7 +68,7 @@ export default function HireJobapplicat({
   budget = "R$ 45,000",
   onViewProfile,
   onSelectHire,
-}) {
+}: HireJobApplicantProps) {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All Applicants");
   const [loadingMore] = useState(true);

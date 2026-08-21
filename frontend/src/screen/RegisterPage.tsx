@@ -10,15 +10,18 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { loginUser, registerUser } from "../api/auth";
-import { useAuth } from "../store/authStore";
+import { useAuthStore } from "../store/authStore";
+import { AuthStackParamList } from "../navigation/types";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 type Role = "hire" | "work";
 
-type RegisterScreenProps = {
-  onBackToLogin: () => void;
-};
+type RegisterScreenProps = NativeStackScreenProps<
+  AuthStackParamList,
+  "Register"
+>;
 
-export default function RegisterScreen({ onBackToLogin }: RegisterScreenProps) {
+export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [role, setRole] = useState<Role>("hire");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,7 +29,7 @@ export default function RegisterScreen({ onBackToLogin }: RegisterScreenProps) {
   const [agreed, setAgreed] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { signIn } = useAuth();
+  const { login } = useAuthStore();
 
   const handleSubmit = async () => {
     if (!agreed) {
@@ -37,17 +40,28 @@ export default function RegisterScreen({ onBackToLogin }: RegisterScreenProps) {
       return;
     }
     if (!fullName.trim() || !email.trim() || password.length < 8) {
-      Alert.alert("Check your details", "Enter your name, a valid email, and a password of at least 8 characters.");
+      Alert.alert(
+        "Check your details",
+        "Enter your name, a valid email, and a password of at least 8 characters.",
+      );
       return;
     }
     setIsSubmitting(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      await registerUser({ email: normalizedEmail, password, full_name: fullName.trim(), role });
+      await registerUser({
+        email: normalizedEmail,
+        password,
+        full_name: fullName.trim(),
+        role,
+      });
       const session = await loginUser({ email: normalizedEmail, password });
-      signIn(session);
+      login(session);
     } catch (error) {
-      Alert.alert("Registration failed", error instanceof Error ? error.message : "Please try again.");
+      Alert.alert(
+        "Registration failed",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -157,7 +171,7 @@ export default function RegisterScreen({ onBackToLogin }: RegisterScreenProps) {
 
           <View style={styles.divider} />
 
-          <TouchableOpacity onPress={onBackToLogin}>
+          <TouchableOpacity onPress={() => navigation.navigate("Login")}>
             <Text style={styles.footerLink}>
               Already have an account?{" Login "}
               <Text style={styles.linkText}>Log In</Text>
