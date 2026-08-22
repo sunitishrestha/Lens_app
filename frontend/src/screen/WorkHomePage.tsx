@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,13 @@ import {
   StyleSheet,
   StatusBar,
   ImageBackground,
+  Alert,
 } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
+import { useAuthStore } from "../store/authStore";
+import { listVacancies, Vacancy } from "../api/vacancies";
+import { applyToVacancy } from "../api/application";
 
 interface EventItem {
   id: string;
@@ -50,20 +54,41 @@ const EVENTS: EventItem[] = [
 ];
 
 interface WorkHomepageProps {
-  userName?: string;
-  onViewDetails?: (eventId: string) => void;
+  onViewDetails?: (eventId: number) => void;
   onNavigateHome?: () => void;
   onNavigateApply?: () => void;
   onNavigateProfile?: () => void;
 }
 
 export default function WorkHomepage({
-  userName = "Alex",
   onViewDetails,
   onNavigateHome,
   onNavigateApply,
   onNavigateProfile,
 }: WorkHomepageProps) {
+  const user = useAuthStore((s) => s.user);
+  const [events, setEvents] = useState<Vacancy[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listVacancies()
+      .then(setEvents)
+      .catch((err) => console.log("Failed to load vacancies:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleApply = async (vacancyId: number) => {
+    try {
+      await applyToVacancy(vacancyId);
+      Alert.alert("Applied!", "Your application was submitted.");
+    } catch (err) {
+      Alert.alert(
+        "Could not apply",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
@@ -88,7 +113,7 @@ export default function WorkHomepage({
         {/* Welcome */}
         <View style={styles.welcomeBlock}>
           <Text style={styles.welcomeLabel}>
-            WELCOME BACK, {userName.toUpperCase()}
+            WELCOME BACK, {(user?.full_name ?? "THERE").toUpperCase()}
           </Text>
           <Text style={styles.welcomeTitle}>
             Ready for your{" "}
@@ -140,7 +165,7 @@ export default function WorkHomepage({
           <Text style={styles.sectionTitle}>Available Events</Text>
           <View style={styles.sectionHeaderRight}>
             <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>24 New</Text>
+              <Text style={styles.newBadgeText}>{events.length} New</Text>
             </View>
             <TouchableOpacity>
               <Text style={styles.seeAll}>See all activity</Text>
@@ -149,48 +174,59 @@ export default function WorkHomepage({
         </View>
 
         {/* Event cards */}
-        {EVENTS.map((event) => (
-          <View key={event.id} style={styles.eventCard}>
-            <ImageBackground
-              source={{ uri: event.image }}
-              style={styles.eventImage}
-              imageStyle={{
-                borderTopLeftRadius: RADIUS.lg,
-                borderTopRightRadius: RADIUS.lg,
-              }}
-            >
-              <View style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>{event.category}</Text>
-              </View>
-            </ImageBackground>
-            <View style={styles.eventBody}>
-              <View style={styles.eventTitleRow}>
-                <Text style={styles.eventTitle}>{event.title}</Text>
-                <Text style={styles.eventPrice}>
-                  {event.price}
-                  <Text style={styles.eventPriceUnit}>/day</Text>
+        {loading ? (
+          <Text style={{ color: COLORS.textSecondary, paddingHorizontal: 20 }}>
+            Loading jobs...
+          </Text>
+        ) : events.length === 0 ? (
+          <Text style={{ color: COLORS.textSecondary, paddingHorizontal: 20 }}>
+            No open jobs right now. Check back soon.
+          </Text>
+        ) : (
+          events.map((event) => (
+            <View key={event.id} style={styles.eventCard}>
+              <View style={styles.eventBody}>
+                <View style={styles.eventTitleRow}>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                  <Text style={styles.eventPrice}>
+                    {event.price}
+                    <Text style={styles.eventPriceUnit}>/day</Text>
+                  </Text>
+                </View>
+                <View style={styles.categoryTag}>
+                  <Text style={styles.categoryTagText}>{event.category}</Text>
+                </View>
+                <View style={styles.eventLocationRow}>
+                  <Ionicons
+                    name="location-outline"
+                    size={13}
+                    color={COLORS.textSecondary}
+                  />
+                  <Text style={styles.eventLocation}> {event.location}</Text>
+                </View>
+                <Text
+                  style={{
+                    color: COLORS.textSecondary,
+                    fontSize: 12,
+                    marginTop: 4,
+                  }}
+                >
+                  {event.applicant_count} applicant
+                  {event.applicant_count === 1 ? "" : "s"} so far
                 </Text>
+                <TouchableOpacity
+                  style={styles.viewDetailsBtn}
+                  onPress={() => {
+                    onViewDetails?.(event.id);
+                    handleApply(event.id);
+                  }}
+                >
+                  <Text style={styles.viewDetailsText}>Apply Now</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.eventLocationRow}>
-                <Ionicons
-                  name="location-outline"
-                  size={13}
-                  color={COLORS.textSecondary}
-                />
-                <Text style={styles.eventLocation}> {event.location}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.viewDetailsBtn}
-                onPress={() => {
-                  onViewDetails?.(event.id);
-                  onNavigateApply?.();
-                }}
-              >
-                <Text style={styles.viewDetailsText}>View Details</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
 
       {/* Bottom Tab Bar */}

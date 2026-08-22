@@ -10,6 +10,9 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { useAuthStore } from "../store/authStore";
+import { myVacancies, Vacancy } from "../api/vacancies";
 
 // ---- Replace these with your real image URIs / require() assets later ----
 const PROJECT_IMG_1 =
@@ -121,6 +124,23 @@ export default function HireHomepage({
   onNavigatePost,
   onNavigateProfile,
 }: HireHomepageProps) {
+  const user = useAuthStore((s) => s.user);
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    myVacancies()
+      .then(setVacancies)
+      .catch((err) => console.log("Failed to load vacancies:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const activeJobs = vacancies.filter((v) => v.status === "open").length;
+  const totalApplicants = vacancies.reduce(
+    (sum, v) => sum + v.applicant_count,
+    0,
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
@@ -151,7 +171,8 @@ export default function HireHomepage({
         <View style={styles.titleBlock}>
           <Text style={styles.title}>Producer Dashboard</Text>
           <Text style={styles.subtitle}>
-            Manage your active sets and professional talent pool.
+            Welcome, {user?.full_name ?? "there"} — manage your active sets and
+            talent pool.
           </Text>
         </View>
 
@@ -168,8 +189,8 @@ export default function HireHomepage({
         {/* Stat cards */}
         <StatCard
           label="ACTIVE JOBS"
-          value="12"
-          sub="↗ +2 this week"
+          value={String(activeJobs)}
+          sub={`${vacancies.length} total posted`}
           subColor={COLORS.green}
           icon={
             <Ionicons name="calendar-outline" size={18} color={COLORS.accent} />
@@ -177,25 +198,11 @@ export default function HireHomepage({
         />
         <StatCard
           label="TOTAL APPLICANTS"
-          value="148"
+          value={String(totalApplicants)}
           sub="Awaiting review"
           subColor={COLORS.textSecondary}
           icon={
             <Ionicons name="people-outline" size={18} color={COLORS.accent} />
-          }
-        />
-        <StatCard
-          label="HIRED PROS"
-          value="34"
-          valueColor={COLORS.orange}
-          sub="On current projects"
-          subColor={COLORS.textSecondary}
-          icon={
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={18}
-              color={COLORS.accent}
-            />
           }
         />
 
@@ -207,68 +214,45 @@ export default function HireHomepage({
           </TouchableOpacity>
         </View>
 
-        {/* Project Card 1 */}
-        <View style={styles.projectCard}>
-          <Image source={{ uri: PROJECT_IMG_1 }} style={styles.projectImage} />
-          <View style={styles.projectBody}>
-            <View style={styles.projectTitleRow}>
-              <Text style={styles.projectTitle}>Cyberpunk Short Film</Text>
-              <StatusBadge text="RECRUITING" variant="blue" />
-            </View>
-            <View style={styles.projectMetaRow}>
-              <Ionicons
-                name="calendar-outline"
-                size={13}
-                color={COLORS.textSecondary}
-              />
-              <Text style={styles.projectMeta}> Oct 12 - Oct 25</Text>
-            </View>
-            <View style={styles.projectFooterRow}>
-              <View style={styles.avatarStack}>
-                <Image
-                  source={{ uri: AVATAR_1 }}
-                  style={[styles.stackAvatar, { marginLeft: 0 }]}
-                />
-                <Image source={{ uri: AVATAR_2 }} style={styles.stackAvatar} />
-                <View style={styles.stackMore}>
-                  <Text style={styles.stackMoreText}>+1</Text>
+        {vacancies.length === 0 && !loading ? (
+          <Text style={{ color: COLORS.textSecondary, paddingHorizontal: 20 }}>
+            You haven't posted any jobs yet. Tap "Post a Job" to get started.
+          </Text>
+        ) : (
+          vacancies.map((v) => (
+            <View key={v.id} style={styles.projectCard}>
+              <View style={styles.projectBody}>
+                <View style={styles.projectTitleRow}>
+                  <Text style={styles.projectTitle}>{v.title}</Text>
+                  <StatusBadge
+                    text={v.status === "open" ? "RECRUITING" : "CLOSED"}
+                    variant={v.status === "open" ? "blue" : "orange"}
+                  />
+                </View>
+                <View style={styles.projectMetaRow}>
+                  <Ionicons
+                    name="location-outline"
+                    size={13}
+                    color={COLORS.textSecondary}
+                  />
+                  <Text style={styles.projectMeta}> {v.location}</Text>
+                </View>
+                <View style={styles.projectFooterRow}>
+                  <Text
+                    style={{
+                      color: COLORS.accent,
+                      fontSize: 13,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {v.applicant_count} applicant
+                    {v.applicant_count === 1 ? "" : "s"}
+                  </Text>
                 </View>
               </View>
-              <TouchableOpacity>
-                <Ionicons
-                  name="ellipsis-vertical"
-                  size={18}
-                  color={COLORS.textSecondary}
-                />
-              </TouchableOpacity>
             </View>
-          </View>
-        </View>
-
-        {/* Project Card 2 */}
-        <View style={styles.projectCard}>
-          <Image source={{ uri: PROJECT_IMG_2 }} style={styles.projectImage} />
-          <View style={styles.projectBody}>
-            <View style={styles.projectTitleRow}>
-              <Text style={styles.projectTitle}>Mountain Peak Documentary</Text>
-              <StatusBadge text="IN PROGRESS" variant="orange" />
-            </View>
-            <View style={styles.projectMetaRow}>
-              <Ionicons
-                name="calendar-outline"
-                size={13}
-                color={COLORS.textSecondary}
-              />
-              <Text style={styles.projectMeta}> Ongoing</Text>
-            </View>
-            <View style={styles.progressRow}>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: "65%" }]} />
-              </View>
-              <Text style={styles.progressLabel}>65%</Text>
-            </View>
-          </View>
-        </View>
+          ))
+        )}
 
         {/* New Applicants */}
         <View style={styles.sectionHeader}>

@@ -1,106 +1,123 @@
 # JobLens
 
-JobLens is a TypeScript mobile app for Expo Go, with a Python FastAPI backend and PostgreSQL database. It currently supports creating an account, logging in with email and password, receiving a JWT access token, calling a protected user endpoint, and persisting the session across app restarts with role-based navigation (`hire` vs `work`).
+JobLens is a TypeScript mobile app for Expo Go, with a Python FastAPI backend and PostgreSQL database. It supports creating an account, logging in, receiving a JWT access token, persisting the session across app restarts with role-based navigation (`hire` vs `work`), hirers posting job vacancies, workers browsing and applying to them, and hirers seeing how many people applied to each job.
 
 ## Project structure
 
 ```text
 JobLens/
 ├── frontend/             # Expo SDK 54 + React Native + TypeScript app
-│   ├── App.tsx            # Restores session on boot, renders AppNavigator
-│   ├── app.json            # Expo settings and phone-to-API address
+│   ├── App.tsx              # Restores session on boot, renders AppNavigator
+│   ├── app.json             # Expo settings and phone-to-API address
 │   └── src/
-│       ├── api/            # Typed FastAPI requests (auth.ts, client.ts)
-│       ├── store/           # Zustand auth store (authStore.tsx)
-│       ├── navigation/       # AppNavigator, AuthStack, HireStack, WorkStack, types.ts
-│       └── screen/          # Login, registration, and signed-in UI
+│       ├── api/              # Typed FastAPI requests (auth.ts, client.ts, vacancies.ts, applications.ts)
+│       ├── store/             # Zustand auth store (authStore.tsx)
+│       ├── navigation/         # AppNavigator, AuthStack, HireStack, WorkStack, types.ts
+│       └── screen/            # Login, registration, hire/work dashboards, profile
 ├── backend/              # FastAPI application
 │   └── app/
-│       ├── routers/       # Authentication API routes
-│       ├── models.py       # PostgreSQL User model
-│       └── security.py     # Password hashing (Argon2) and JWT tokens
+│       ├── routers/         # auth, vacancies, applications
+│       ├── models/           # user, vacancy, application (SQLAlchemy)
+│       ├── schemas/          # auth, vacancy, application (Pydantic)
+│       ├── core/              # security.py (hashing/JWT), deps.py (auth dependencies)
+│       └── database.py        # DB engine/session setup
 └── docker-compose.yml    # PostgreSQL and FastAPI containers
 ```
 
 ## What is complete
 
-### Frontend
+### Backend — Auth
 
-- Expo Go compatibility is set to **Expo SDK 54**.
-- The app uses **TypeScript** and React Native.
-- The dark UI has working Login and Create Account screens.
-- Forms validate missing fields and password length before requests are sent.
-- Login and registration call the FastAPI backend via a typed `apiRequest<T>` wrapper (`src/api/client.ts`) and `src/api/auth.ts`.
-- **Session state is managed globally with Zustand** (`src/store/authStore.tsx`):
-  - `login(response)` — stores the JWT in `expo-secure-store` and sets `user` in state.
-  - `logout()` — clears the token from SecureStore and resets state.
-  - `restoreSession()` — on app boot, reads the token from SecureStore and calls `GET /auth/me` to re-hydrate the logged-in user, so **sessions now survive closing/reopening the app**.
-- **Navigation is handled with React Navigation** (`@react-navigation/native` + `@react-navigation/native-stack`), replacing the earlier manual prop-based screen switching:
-  - `AppNavigator.tsx` reads `user` from the auth store and renders `AuthStack`, `HireStack`, or `WorkStack` accordingly, wrapped in a single `NavigationContainer`.
-  - `AuthStack.tsx` — Login and Register screens, navigated via `navigation.navigate("Login" | "Register")` instead of passed-in callback props.
-  - `HireStack.tsx` / `WorkStack.tsx` — role-specific screens (dashboard, job posting/application flow, profile).
-  - Shared route typing lives in `src/navigation/types.ts` (`AuthStackParamList`, etc.) so every screen gets typed `navigation` props via `NativeStackScreenProps`.
-- Successful login now routes users to role-based screens automatically based on `user.role` from the JWT-authenticated `/auth/me` response:
-  - Hire users go to the hire dashboard, post-event screen, and hire profile.
-  - Work users go to the work homepage, job application screen, and work profile.
-- The hire dashboard includes a Post a Job action that opens the event creation flow.
-- The work homepage now sends users to the application flow when they tap View Details.
-- Profile screens include a logout confirmation popup with Cancel/Yes actions, wired to the store's `logout()`.
-- The API address is stored in `frontend/app.json` under `expo.extra.apiUrl`.
-
-### Backend
-
-- FastAPI API with Swagger documentation.
+- FastAPI API with Swagger documentation at `/docs`.
 - PostgreSQL database via Docker.
-- `users` table with full name, email, password hash, role, and creation time.
+- `users` table with full name, email, password hash, role (`hire` | `work`), and creation time.
 - Passwords are hashed with Argon2 (`pwdlib`); raw passwords are never stored.
-- JWT authentication tokens are created on login and validated on protected routes via a `get_current_user` dependency.
+- JWT authentication tokens are created on login and validated on protected routes via a `get_current_user` dependency (`app/core/deps.py`).
+- `require_role("hire")` / `require_role("work")` dependency restricts endpoints by role — e.g. only `hire` users can post a vacancy, only `work` users can apply to one.
 - CORS is enabled for development.
 
-### Current API routes
+### Backend — Vacancies & Applications (built this session)
 
-| Method | Route                   | Purpose                                  |
-| ------ | ----------------------- | ---------------------------------------- |
-| `GET`  | `/health`               | Confirm the API is running               |
-| `POST` | `/api/v1/auth/register` | Create a `hire` or `work` account        |
-| `POST` | `/api/v1/auth/login`    | Receive a JWT token and user data        |
-| `GET`  | `/api/v1/auth/me`       | Get the current user with a Bearer token |
+This is the core "job board" logic connecting hirers and workers:
+
+- **`app/models/vacancy.py`** — `Vacancy` table: title, category, description, location, price, status (`open`/`closed`), linked to the hirer via `hirer_id` (foreign key to `users.id`).
+- **`app/models/application.py`** — `Application` table: links a `vacancy_id` to an `applicant_id` (the worker), with a `status` field (`applied` / `shortlisted` / `hired` / `rejected`). A unique constraint on `(vacancy_id, applicant_id)` stops the same worker from applying twice to the same job.
+- **`app/schemas/vacancy.py`** and **`app/schemas/application.py`** — Pydantic request/response contracts, including an `applicant_count` field computed per vacancy so the hire dashboard can show live numbers without a separate request.
+- **Routers:**
+
+  | Method  | Route                               | Who    | Purpose                                                                       |
+  | ------- | ----------------------------------- | ------ | ----------------------------------------------------------------------------- |
+  | `POST`  | `/api/v1/vacancies`                 | `hire` | Create a new job posting                                                      |
+  | `GET`   | `/api/v1/vacancies`                 | anyone | Public feed of all open vacancies (used by Work dashboard)                    |
+  | `GET`   | `/api/v1/vacancies/mine`            | `hire` | This hirer's own posted jobs, with applicant counts                           |
+  | `GET`   | `/api/v1/vacancies/{id}`            | anyone | Single vacancy detail                                                         |
+  | `POST`  | `/api/v1/applications`              | `work` | Apply to a vacancy (blocks duplicate applications)                            |
+  | `GET`   | `/api/v1/applications/me`           | `work` | A worker's own list of applications                                           |
+  | `GET`   | `/api/v1/applications/vacancy/{id}` | `hire` | See everyone who applied to one of your own vacancies (with their name/email) |
+  | `PATCH` | `/api/v1/applications/{id}/status`  | `hire` | Update an applicant's status (shortlist / hire / reject)                      |
+
+- Ownership checks are enforced server-side: a hirer can only view/manage applicants for vacancies **they themselves** posted (checked via `vacancy.hirer_id == current_user.id`), not any hirer's jobs.
+
+### Frontend — State & Navigation
+
+- **Session state managed globally with Zustand** (`src/store/authStore.tsx`):
+  - `login(response)` — stores the JWT in `expo-secure-store`, sets `user` in state.
+  - `logout()` — clears the token, resets state.
+  - `restoreSession()` — on app boot, reads the token and calls `GET /auth/me` to re-hydrate the logged-in user, so sessions survive closing/reopening the app.
+- **Navigation via React Navigation** (`@react-navigation/native` + `@react-navigation/native-stack`):
+  - `AppNavigator.tsx` reads `user` from the store and renders `AuthStack`, `HireStack`, or `WorkStack` based on `user.role`, wrapped in one `NavigationContainer`.
+  - Screens use `navigation.navigate(...)` (typed via `NativeStackScreenProps` and a shared `AuthStackParamList` in `src/navigation/types.ts`) instead of manually passed-in callback props.
+
+### Frontend — Vacancies & Applications (built this session)
+
+- **`src/api/vacancies.ts`** — typed functions: `createVacancy`, `listVacancies`, `myVacancies`, `getVacancy`.
+- **`src/api/applications.ts`** — typed functions: `applyToVacancy`, `myApplications`, `applicantsForVacancy`, `updateApplicationStatus`.
+- **Hire dashboard (`HireHomepage.tsx`)** now:
+  - Shows the real logged-in hirer's name (`user.full_name` from the auth store) instead of static text.
+  - Fetches `myVacancies()` on load and replaces the hardcoded "12 active jobs / 148 applicants" stat cards with real counts computed from the response.
+  - Replaces the two hardcoded demo project cards with a live list of the hirer's own posted vacancies, each showing real title, status (open/closed), location, and applicant count.
+- **Work dashboard (`WorkHomepage.tsx`)** now:
+  - Shows the real logged-in worker's name instead of the hardcoded `userName = "Alex"` default prop.
+  - Fetches `listVacancies()` (the public open-jobs feed) instead of using the hardcoded `EVENTS` array.
+  - Tapping a job card calls `applyToVacancy(vacancyId)`, which hits `POST /api/v1/applications` and shows a success/error alert.
+  - Each card shows a live applicant count pulled from the backend.
 
 ## What has already been run
 
-The following setup was completed during development:
-
 ```powershell
-# Checked the Docker Compose configuration
+# Backend
 docker compose config
-
-# Built and started the PostgreSQL and FastAPI containers
 docker compose up --build -d
-
-# Verified the containers
 docker compose ps
 
 # Verified the database schema directly
 docker exec -it joblens-db-1 psql -U joblens -d joblens
 # \dt
 # SELECT * FROM users;
+# (after this session's backend work, \dt should also show vacancies and applications)
 
-# Installed frontend state/navigation dependencies
+# Frontend dependencies
 npx expo install zustand @react-navigation/native @react-navigation/native-stack react-native-screens react-native-safe-area-context
-
-# Verified the frontend code and navigation setup
 npx tsc --noEmit
 ```
 
 The API was tested successfully with this flow:
 
 1. `GET /health` returned `{"status":"ok"}`.
-2. A test user was registered.
-3. That account logged in and received a JWT token.
-4. `GET /api/v1/auth/me` returned the authenticated test user.
-5. Confirmed via `psql` that registered users appear in the `users` table with Argon2-hashed passwords (never plaintext).
+2. A test user registered, logged in, and `GET /api/v1/auth/me` returned that user.
+3. Confirmed via `psql` that registered users appear in `users` with Argon2-hashed passwords (never plaintext).
 
-The containers were started successfully at that time. If you have restarted Docker or your computer since then, start them again using the command below.
+**Not yet re-verified after this session's vacancy/application backend code was added** — before relying on it, run through this checklist:
+
+1. `docker compose up --build -d` (rebuild so the new models/routers are picked up).
+2. In `/docs`, log in as a `hire` user → `POST /api/v1/vacancies` → create a job.
+3. `GET /api/v1/vacancies` → confirm it appears in the public feed.
+4. Log in as a `work` user → `POST /api/v1/applications` with that `vacancy_id`.
+5. Back as the hire user → `GET /api/v1/applications/vacancy/{vacancy_id}` → confirm the applicant shows with name/email.
+6. `GET /api/v1/vacancies/mine` as the hire user → confirm `applicant_count` is now `1`.
+7. In `psql`, run `\dt` and confirm `vacancies` and `applications` tables exist; `SELECT * FROM vacancies;` / `SELECT * FROM applications;` to see the rows.
+
+Only once all of that passes in Swagger/psql should the frontend screens be trusted end-to-end on a phone.
 
 ## Prerequisites
 
@@ -135,6 +152,18 @@ Check the database directly if needed:
 
 ```powershell
 docker exec -it joblens-db-1 psql -U joblens -d joblens
+```
+
+Inside `psql`, useful commands while developing:
+
+```sql
+\pset pager off      -- stop results from paginating and hiding rows
+\x                    -- expanded display, one column per line (easier to read)
+\dt                   -- list all tables
+\d+ vacancies         -- full column details for one table
+SELECT * FROM users;
+SELECT * FROM vacancies;
+SELECT * FROM applications;
 ```
 
 Stop the backend when you are finished:
@@ -191,25 +220,33 @@ Use the IPv4 Address listed under **Wireless LAN adapter Wi-Fi**. Keep the phone
 4. Tap **Sign Up**, choose a role, provide a name, valid email, password of at least eight characters, and accept the terms.
 5. Return to Login and sign in using the new account.
 6. Close and reopen the app — you should stay logged in (session restored from SecureStore via `restoreSession()`).
-7. Log out from the profile screen and confirm you're returned to the Login screen.
+7. As a `hire` account: use the Post a Job flow to create a vacancy, and see it appear on your dashboard with a real applicant count.
+8. As a `work` account: browse the open jobs feed and apply to one; confirm the applicant count on the hirer's side goes up.
+9. Log out from the profile screen and confirm you're returned to the Login screen.
 
 ## Current limitations / next work
 
 - Only an access token is issued — there is no refresh token yet, so the session expires when the JWT expires (no silent refresh).
 - Password reset, Google login, and Apple login buttons are visual only.
-- The app now has core hire/work navigation and screen flows, but real backend persistence for job postings and applications is still pending (next milestone: `vacancies` and `applications` tables + routers).
+- The job-posting form screen (`HirePostEvent...`) still needs to be wired to call `createVacancy()` — the dashboards can read/apply to vacancies, but creating one from the UI is the next piece to connect.
+- The Hire dashboard's "New Applicants" feed (recent applicants across _all_ of a hirer's jobs) is not built yet — currently only per-vacancy applicant lists are available via `applicantsForVacancy(vacancyId)`.
+- Vacancy posts have no image/photo field yet — job cards are currently text-only.
 - Database tables are created automatically at startup via `Base.metadata.create_all()`; production should use Alembic migrations instead.
 - `JWT_SECRET` and CORS settings are development values. Change them before deployment.
 
 ## Useful files
 
-- `frontend/package.json` — Expo SDK 54 dependencies (now includes zustand, react-navigation)
+- `frontend/package.json` — Expo SDK 54 dependencies (zustand, react-navigation)
 - `frontend/app.json` — application name and API address
 - `frontend/src/api/auth.ts` — login and registration requests
+- `frontend/src/api/vacancies.ts` — create/list/get vacancy requests
+- `frontend/src/api/applications.ts` — apply/list/update application requests
 - `frontend/src/api/client.ts` — typed fetch wrapper with auth token injection
 - `frontend/src/store/authStore.tsx` — global auth state (login/logout/restoreSession)
 - `frontend/src/navigation/AppNavigator.tsx` — role-based root navigator
 - `frontend/src/navigation/types.ts` — shared navigation param list types
 - `backend/.env` — local API and database configuration
 - `backend/app/main.py` — FastAPI entry point
+- `backend/app/models/vacancy.py`, `backend/app/models/application.py` — job board data models
+- `backend/app/routers/vacancies.py`, `backend/app/routers/applications.py` — job board API routes
 - `docker-compose.yml` — containers to run locally

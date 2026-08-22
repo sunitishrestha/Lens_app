@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import Base, engine
 from app.routers.auth import router as auth_router
+from app.routers.vacancies import router as vacancies_router
+from app.routers.applications import router as applications_router
+
 
 settings = get_settings()
 app = FastAPI(title="JobLens API", version="0.1.0")
@@ -20,3 +23,5 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(vacancies_router, prefix="/api/v1")
+app.include_router(applications_router, prefix="/api/v1")
