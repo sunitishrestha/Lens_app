@@ -11,117 +11,37 @@ import {
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
-
-interface EquipmentItem {
-  id: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  name: string;
-  subtitle: string;
-}
-
-interface ExperienceItem {
-  id: string;
-  years: string;
-  role: string;
-  description: string;
-}
-
-interface PortfolioItem {
-  id: string;
-  image: string;
-  title: string;
-  tags: string[];
-}
-
-const EQUIPMENT: EquipmentItem[] = [
-  {
-    id: "1",
-    icon: "videocam-outline",
-    name: "Sony FX6",
-    subtitle: "FULL FRAME CINEMA",
-  },
-  {
-    id: "2",
-    icon: "airplane-outline",
-    name: "DJI Mavic 3 Pro",
-    subtitle: "4/3 CMOS HASSELBLAD",
-  },
-];
-
-const EXPERIENCE: ExperienceItem[] = [
-  {
-    id: "1",
-    years: "2023 - PRESENT",
-    role: "Lead DP @ Aurora Films",
-    description:
-      "Spearheaded cinematography for national commercial campaigns.",
-  },
-  {
-    id: "2",
-    years: "2021 - 2023",
-    role: "Freelance Camera Op",
-    description: "Music videos and documentary shorts across Europe.",
-  },
-];
-
-const PORTFOLIO: PortfolioItem[] = [
-  {
-    id: "1",
-    image: "https://images.unsplash.com/photo-1519608487953-e999c86e7455?w=700",
-    title: "Neon Pulse - Commercial",
-    tags: ["ARRI ALEXA", "4K RAW"],
-  },
-  {
-    id: "2",
-    image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=700",
-    title: "Mountain Peaks - Documentary",
-    tags: ["MAVIC 3 PRO", "10-BIT LOG"],
-  },
-  {
-    id: "3",
-    image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=700",
-    title: "Midnight Soul - Music Video",
-    tags: ["SONY FX6", "ANAMORPHIC"],
-  },
-  {
-    id: "4",
-    image: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=700",
-    title: "Precision - Product Spot",
-    tags: ["RED KOMODO", "MACRO 100MM"],
-  },
-];
+import { useAuthStore } from "../store/authStore";
 
 interface CameramanProfileScreenProps {
-  name?: string;
-  role?: string;
-  avatarUri?: string;
-  skills?: string[];
   onBookNow?: () => void;
   onMessage?: () => void;
   onNavigateHome?: () => void;
   onNavigateApply?: () => void;
   onNavigateProfile?: () => void;
-  onLogout?: () => void;
 }
 
 export default function CameramanProfileScreen({
-  name = "Alex Rivers",
-  role = "Cinematographer",
-  avatarUri = "https://randomuser.me/api/portraits/men/32.jpg",
-  skills = ["4K RAW", "Drone Pilot", "DaVinci Resolve"],
   onBookNow,
   onMessage,
   onNavigateHome,
   onNavigateApply,
   onNavigateProfile,
-  onLogout,
 }: CameramanProfileScreenProps) {
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Yes", onPress: onLogout },
+      { text: "Yes", onPress: logout },
     ]);
   };
+
+  const name = user?.full_name ?? "Your Name";
+  const skills = user?.skills && user.skills.length > 0 ? user.skills : [];
+  const avatarUri =
+    user?.avatar_url ?? "https://randomuser.me/api/portraits/lego/1.jpg"; // neutral placeholder until they upload one
 
   return (
     <View style={styles.container}>
@@ -158,7 +78,9 @@ export default function CameramanProfileScreen({
           <View style={styles.premiumBadge}>
             <Text style={styles.premiumBadgeText}>PREMIUM MEMBER</Text>
           </View>
-          <Text style={styles.roleText}>{role}</Text>
+          <Text style={styles.roleText}>
+            {user?.role === "hire" ? "Hire" : "Work"}
+          </Text>
 
           <View style={styles.skillsRow}>
             {skills.map((skill) => (
@@ -179,81 +101,14 @@ export default function CameramanProfileScreen({
         </View>
 
         {/* Equipment card */}
+        {/* Equipment card */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Ionicons name="aperture-outline" size={18} color={COLORS.orange} />
             <Text style={styles.cardHeaderText}> Equipment</Text>
           </View>
-          {EQUIPMENT.map((item) => (
-            <View key={item.id} style={styles.equipmentRow}>
-              <View style={styles.equipmentIconBox}>
-                <Ionicons
-                  name={item.icon}
-                  size={18}
-                  color={COLORS.textPrimary}
-                />
-              </View>
-              <View style={{ marginLeft: 12 }}>
-                <Text style={styles.equipmentName}>{item.name}</Text>
-                <Text style={styles.equipmentSubtitle}>{item.subtitle}</Text>
-              </View>
-            </View>
-          ))}
+          <Text style={styles.equipmentSubtitle}>No equipment added yet.</Text>
         </View>
-
-        {/* Experience card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Ionicons name="time-outline" size={18} color={COLORS.orange} />
-            <Text style={styles.cardHeaderText}> Experience</Text>
-          </View>
-          {EXPERIENCE.map((item, index) => (
-            <View
-              key={item.id}
-              style={[
-                styles.experienceRow,
-                index < EXPERIENCE.length - 1 && styles.experienceRowBorder,
-              ]}
-            >
-              <Text style={styles.experienceYears}>{item.years}</Text>
-              <Text style={styles.experienceRole}>{item.role}</Text>
-              <Text style={styles.experienceDescription}>
-                {item.description}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Portfolio */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.cardHeaderRow}>
-            <Ionicons
-              name="grid-outline"
-              size={18}
-              color={COLORS.textPrimary}
-            />
-            <Text style={styles.portfolioTitle}> Portfolio</Text>
-          </View>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>VIEW ALL</Text>
-          </TouchableOpacity>
-        </View>
-
-        {PORTFOLIO.map((item) => (
-          <View key={item.id} style={styles.portfolioCard}>
-            <Image source={{ uri: item.image }} style={styles.portfolioImage} />
-            <View style={styles.portfolioBody}>
-              <Text style={styles.portfolioItemTitle}>{item.title}</Text>
-              <View style={styles.portfolioTagsRow}>
-                {item.tags.map((tag) => (
-                  <View key={tag} style={styles.portfolioTag}>
-                    <Text style={styles.portfolioTagText}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
-        ))}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons

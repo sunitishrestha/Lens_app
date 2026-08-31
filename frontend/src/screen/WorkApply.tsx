@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +10,10 @@ import {
 } from "react-native";
 import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
+import { useEffect, useState } from "react";
+import { getVacancy, Vacancy } from "../api/vacancies";
+import { applyToVacancy } from "../api/application";
+import { Alert } from "react-native";
 
 const EQUIPMENT_OPTIONS = [
   "ARRI Alexa Mini LF",
@@ -21,37 +24,34 @@ const EQUIPMENT_OPTIONS = [
 ];
 
 interface ApplyJobScreenProps {
-  eventTitle?: string;
-  eventDate?: string;
-  eventLocation?: string;
-  eventImage?: string;
+  vacancyId: number;
   onCancel?: () => void;
-  onSubmit?: (data: {
-    portfolioLink: string;
-    message: string;
-    confirmedAvailability: boolean;
-    equipment: string[];
-  }) => void;
+  onSubmitted?: () => void;
   onNavigateHome?: () => void;
   onNavigateApply?: () => void;
   onNavigateProfile?: () => void;
 }
 
 export default function ApplyJobScreen({
-  eventTitle = "High-End Wedding Shoot",
-  eventDate = "Aug 24, 2024",
-  eventLocation = "The Grand Plaza, Manhattan",
-  eventImage = "https://images.unsplash.com/photo-1519741497674-611481863552?w=800",
+  vacancyId,
   onCancel,
-  onSubmit,
+  onSubmitted,
   onNavigateHome,
   onNavigateApply,
   onNavigateProfile,
 }: ApplyJobScreenProps) {
+  const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [portfolioLink, setPortfolioLink] = useState("");
   const [message, setMessage] = useState("");
   const [confirmedAvailability, setConfirmedAvailability] = useState(false);
   const [equipment, setEquipment] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    getVacancy(vacancyId)
+      .then(setVacancy)
+      .catch((err) => console.log(err));
+  }, [vacancyId]);
 
   const toggleEquipment = (item: string) => {
     setEquipment((prev) =>
@@ -59,8 +59,30 @@ export default function ApplyJobScreen({
     );
   };
 
-  const handleSubmit = () => {
-    onSubmit?.({ portfolioLink, message, confirmedAvailability, equipment });
+  const handleSubmit = async () => {
+    if (!confirmedAvailability) {
+      Alert.alert(
+        "Confirm availability",
+        "Please confirm you're available before submitting.",
+      );
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await applyToVacancy(vacancyId);
+      Alert.alert(
+        "Application submitted!",
+        "The hirer will review your application.",
+      );
+      onSubmitted?.();
+    } catch (err) {
+      Alert.alert(
+        "Could not apply",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -83,25 +105,38 @@ export default function ApplyJobScreen({
         </View>
 
         {/* Event banner */}
-        <ImageBackground
-          source={{ uri: eventImage }}
-          style={styles.banner}
-          imageStyle={{ borderRadius: RADIUS.lg }}
-        >
-          <View style={styles.bannerOverlay}>
-            <View style={styles.bannerTopRow}>
-              <View style={styles.premiumBadge}>
-                <Text style={styles.premiumBadgeText}>PREMIUM EVENT</Text>
-              </View>
-              <Text style={styles.bannerDate}>{eventDate}</Text>
-            </View>
-            <Text style={styles.bannerTitle}>{eventTitle}</Text>
-            <View style={styles.bannerLocationRow}>
-              <Ionicons name="location-outline" size={13} color="#E5E9F0" />
-              <Text style={styles.bannerLocation}> {eventLocation}</Text>
-            </View>
+        {/* Job info header */}
+        <View style={styles.plainBanner}>
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumBadgeText}>
+              {vacancy?.category ?? "JOB"}
+            </Text>
           </View>
-        </ImageBackground>
+          <Text style={styles.bannerTitle}>
+            {vacancy?.title ?? "Loading..."}
+          </Text>
+          <View style={styles.bannerLocationRow}>
+            <Ionicons
+              name="location-outline"
+              size={13}
+              color={COLORS.textSecondary}
+            />
+            <Text style={styles.bannerLocation}>
+              {" "}
+              {vacancy?.location ?? ""}
+            </Text>
+          </View>
+          <Text
+            style={{
+              color: COLORS.accent,
+              fontSize: 16,
+              fontWeight: "700",
+              marginTop: 8,
+            }}
+          >
+            {vacancy?.price ?? ""}
+          </Text>
+        </View>
 
         {/* Portfolio link */}
         <Text style={styles.fieldLabel}>PORTFOLIO LINK</Text>
@@ -119,12 +154,21 @@ export default function ApplyJobScreen({
 
         {/* CV upload */}
         <Text style={styles.fieldLabel}>CV / RESUME (PDF)</Text>
-        <TouchableOpacity style={styles.uploadBox}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Feather name="file-text" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.uploadText}> Upload technical CV</Text>
-          </View>
-          <Text style={styles.uploadMax}>MAX 5MB</Text>
+        <TouchableOpacity
+          style={styles.submitBtn}
+          onPress={handleSubmit}
+          activeOpacity={0.85}
+          disabled={submitting}
+        >
+          <Text style={styles.submitText}>
+            {submitting ? "Submitting..." : "Submit Application"}
+          </Text>
+          <Ionicons
+            name="arrow-forward"
+            size={18}
+            color="#04202B"
+            style={{ marginLeft: 8 }}
+          />
         </TouchableOpacity>
 
         {/* Message */}
@@ -279,6 +323,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.5,
   },
+  plainBanner: {
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    borderRadius: RADIUS.lg,
+    marginHorizontal: SPACING.lg,
+    padding: SPACING.lg,
+  },
+
   banner: {
     height: 220,
     marginHorizontal: SPACING.lg,

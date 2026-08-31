@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -11,22 +11,39 @@ import {
 } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
+import { useAuthStore } from "../store/authStore";
+import { myVacancies, Vacancy } from "../api/vacancies";
 
-const PROFILE_SKILLS = ["Budgeting", "Talent Scout", "Production Planning"];
+interface HireProfileScreenProps {
+  onNavigateHome?: () => void;
+  onNavigatePost?: () => void;
+  onNavigateProfile?: () => void;
+  onLogout?: () => void;
+}
 
 export default function HireProfileScreen({
-  name = "Alex Rivers",
-  role = "Producer / Studio Head",
-  avatarUri = "https://randomuser.me/api/portraits/men/12.jpg",
   onNavigateHome,
   onNavigatePost,
   onNavigateProfile,
   onLogout,
-}) {
+}: HireProfileScreenProps) {
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+
+  useEffect(() => {
+    myVacancies().then(setVacancies).catch(console.log);
+  }, []);
+
+  const avatarUri =
+    user?.avatar_url ?? "https://randomuser.me/api/portraits/men/12.jpg";
+  const bio =
+    user?.bio ?? "Add a studio bio to tell workers about your projects.";
+
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Yes", onPress: onLogout },
+      { text: "Yes", onPress: logout },
     ]);
   };
 
@@ -60,11 +77,13 @@ export default function HireProfileScreen({
             </View>
           </View>
 
-          <Text style={styles.name}>{name}</Text>
-          <Text style={styles.roleText}>{role}</Text>
+          <Text style={styles.name}>{user?.full_name || "Your Name"}</Text>
+          <Text style={styles.roleText}>
+            {user?.role === "hire" ? "Hire" : "Work"}
+          </Text>
 
           <View style={styles.skillsRow}>
-            {PROFILE_SKILLS.map((skill) => (
+            {user?.skills?.map((skill) => (
               <View key={skill} style={styles.skillPill}>
                 <Text style={styles.skillPillText}>{skill}</Text>
               </View>
@@ -72,30 +91,26 @@ export default function HireProfileScreen({
           </View>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Ionicons name="business-outline" size={18} color={COLORS.accent} />
-            <Text style={styles.cardHeaderText}> Studio Overview</Text>
-          </View>
-          <Text style={styles.cardText}>
-            Managing premium productions, hiring elite camera professionals, and
-            coordinating high-end shoots across London and beyond.
-          </Text>
-        </View>
+        <Text style={styles.cardText}>{bio}</Text>
 
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Ionicons name="calendar-outline" size={18} color={COLORS.orange} />
             <Text style={styles.cardHeaderText}> Upcoming Projects</Text>
           </View>
-          <View style={styles.listItem}>
-            <Text style={styles.listTitle}>Cyberpunk Short Film</Text>
-            <Text style={styles.listSub}>Oct 12 • 6 crew needed</Text>
-          </View>
-          <View style={styles.listItem}>
-            <Text style={styles.listTitle}>Luxury Tech Campaign</Text>
-            <Text style={styles.listSub}>Nov 03 • 3 crew needed</Text>
-          </View>
+          {vacancies.length === 0 ? (
+            <Text style={styles.listSub}>You haven't posted any jobs yet.</Text>
+          ) : (
+            vacancies.slice(0, 3).map((v) => (
+              <View key={v.id} style={styles.listItem}>
+                <Text style={styles.listTitle}>{v.title}</Text>
+                <Text style={styles.listSub}>
+                  {v.applicant_count} applicant
+                  {v.applicant_count === 1 ? "" : "s"}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -126,7 +141,14 @@ export default function HireProfileScreen({
   );
 }
 
-function TabItem({ icon, label, active, onPress }) {
+interface TabItemProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+}
+
+function TabItem({ icon, label, active, onPress }: TabItemProps) {
   return (
     <TouchableOpacity style={styles.tabItem} onPress={onPress}>
       <Ionicons

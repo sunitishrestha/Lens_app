@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,76 +12,59 @@ import {
 } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
-
-const FILTERS = [
-  "All Applicants",
-  "Director of Photography",
-  "Camera Operator",
-  "2nd AC / Lighting",
-];
-
-const APPLICANTS = [
-  {
-    id: "1",
-    name: "Sarah Jenkins",
-    role: "Director of Photography",
-    isPro: true,
-    avatar: "https://randomuser.me/api/portraits/women/68.jpg",
-    experienceLine: "5+ Years experience • 12 Wedding Credits",
-    tags: ["RED Komodo", "DJI Ronin 4D", "Anamorphic Kit"],
-  },
-  {
-    id: "2",
-    name: "Marcus Thorne",
-    role: "Camera Operator",
-    isPro: false,
-    avatar: "https://randomuser.me/api/portraits/men/54.jpg",
-    experienceLine: "8+ Years experience • Narrative Specialist",
-    tags: ["ARRI Alexa Mini", "Steadicam Pro"],
-  },
-  {
-    id: "3",
-    name: "Liam Chen",
-    role: "2nd AC / Lighting Tech",
-    isPro: false,
-    avatar: "https://randomuser.me/api/portraits/men/76.jpg",
-    experienceLine: "2 Years experience • Rising Talent",
-    tags: ["Aputure Lighting", "Wireless Focus"],
-  },
-];
+import {
+  applicantsForVacancy,
+  updateApplicationStatus,
+  Applicant,
+} from "../api/application";
+import { getVacancy, Vacancy } from "../api/vacancies";
 
 interface HireJobApplicantProps {
-  jobTitle?: string;
-  jobDate?: string;
-  jobLocation?: string;
-  applicantCount?: number;
-  budget?: string;
-  onViewProfile?: (applicantId: string) => void;
-  onSelectHire?: (applicantId: string) => void;
+  vacancyId: number;
+  onViewProfile?: (applicantId: number) => void;
+  onSelectHire?: (applicationId: number) => void;
 }
 
 export default function HireJobapplicat({
-  jobTitle = "Wedding Shoot: Estate Ceremony",
-  jobDate = "JUNE 14, 2024",
-  jobLocation = "Bel Air, CA",
-  applicantCount = 12,
-  budget = "R$ 45,000",
+  vacancyId,
   onViewProfile,
   onSelectHire,
 }: HireJobApplicantProps) {
   const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState("All Applicants");
-  const [loadingMore] = useState(true);
+  const [vacancy, setVacancy] = useState<Vacancy | null>(null);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredApplicants = APPLICANTS.filter((a) => {
-    const matchesFilter =
-      activeFilter === "All Applicants" || a.role === activeFilter;
+  useEffect(() => {
+    Promise.all([getVacancy(vacancyId), applicantsForVacancy(vacancyId)])
+      .then(([v, apps]) => {
+        setVacancy(v);
+        setApplicants(apps);
+      })
+      .catch((err) => console.log(err))
+      .finally(() => setLoading(false));
+  }, [vacancyId]);
+
+  const filteredApplicants = applicants.filter((a) => {
     const matchesSearch =
       search.trim() === "" ||
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-    return matchesFilter && matchesSearch;
+      a.full_name.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch;
   });
+
+  const handleSelectHire = async (applicationId: number) => {
+    try {
+      await updateApplicationStatus(applicationId, "hired");
+      setApplicants((prev) =>
+        prev.map((a) =>
+          a.application_id === applicationId ? { ...a, status: "hired" } : a,
+        ),
+      );
+      onSelectHire?.(applicationId);
+    } catch (err) {
+      console.log("Failed to update status:", err);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -107,27 +90,24 @@ export default function HireJobapplicat({
         <View style={styles.postingBlock}>
           <View style={styles.postingTopRow}>
             <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>ACTIVE POSTING</Text>
-            </View>
-            <View style={styles.dateRow}>
-              <Ionicons
-                name="calendar-outline"
-                size={12}
-                color={COLORS.textSecondary}
-              />
-              <Text style={styles.dateText}> {jobDate}</Text>
+              <Text style={styles.activeBadgeText}>
+                {vacancy?.status === "open" ? "ACTIVE POSTING" : "CLOSED"}
+              </Text>
             </View>
           </View>
-          <Text style={styles.jobTitle}>{jobTitle}</Text>
+          <Text style={styles.jobTitle}>{vacancy?.title ?? "Loading..."}</Text>
           <View style={styles.locationRow}>
             <Ionicons
               name="location-outline"
               size={13}
               color={COLORS.textSecondary}
             />
-            <Text style={styles.locationText}> {jobLocation} • </Text>
+            <Text style={styles.locationText}>
+              {" "}
+              {vacancy?.location ?? ""} •{" "}
+            </Text>
             <Text style={styles.applicantCountText}>
-              {applicantCount} Applicants
+              {applicants.length} Applicants
             </Text>
           </View>
         </View>
@@ -135,9 +115,7 @@ export default function HireJobapplicat({
         {/* Budget card */}
         <View style={styles.budgetCard}>
           <Text style={styles.budgetLabel}>PROJECT BUDGET CONTEXT</Text>
-          <Text style={styles.budgetValue}>
-            {budget} <Text style={styles.budgetValueUnit}>/ Total</Text>
-          </Text>
+          <Text style={styles.budgetValue}>{vacancy?.price ?? "-"}</Text>
           <View style={styles.budgetSubRow}>
             <Ionicons
               name="time-outline"
@@ -157,93 +135,63 @@ export default function HireJobapplicat({
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search applicants by name or gear..."
+            placeholder="Search applicants by name..."
             placeholderTextColor={COLORS.textSecondary}
             style={styles.searchInput}
           />
         </View>
 
-        {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={{ paddingHorizontal: SPACING.lg }}
-        >
-          {FILTERS.map((filter) => {
-            const active = filter === activeFilter;
-            return (
-              <TouchableOpacity
-                key={filter}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => setActiveFilter(filter)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    active && styles.filterChipTextActive,
-                  ]}
-                >
-                  {filter}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
         {/* Applicant cards */}
         <View style={{ marginTop: SPACING.md }}>
-          {filteredApplicants.map((applicant) => (
-            <View key={applicant.id} style={styles.applicantCard}>
-              <View style={styles.avatarWrap}>
-                <Image
-                  source={{ uri: applicant.avatar }}
-                  style={styles.applicantAvatar}
-                />
-                {applicant.isPro && (
-                  <View style={styles.proBadge}>
-                    <Text style={styles.proBadgeText}>PRO</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.applicantName}>{applicant.name}</Text>
-              <Text style={styles.applicantRole}>{applicant.role}</Text>
-              <Text style={styles.applicantExperience}>
-                {applicant.experienceLine}
-              </Text>
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color={COLORS.accent}
+              style={{ marginTop: 20 }}
+            />
+          ) : filteredApplicants.length === 0 ? (
+            <Text
+              style={{
+                color: COLORS.textSecondary,
+                textAlign: "center",
+                marginTop: 20,
+              }}
+            >
+              No applicants yet.
+            </Text>
+          ) : (
+            filteredApplicants.map((applicant) => (
+              <View key={applicant.application_id} style={styles.applicantCard}>
+                <Text style={styles.applicantName}>{applicant.full_name}</Text>
+                <Text style={styles.applicantRole}>{applicant.email}</Text>
+                <Text style={styles.applicantExperience}>
+                  Applied {new Date(applicant.applied_at).toLocaleDateString()}{" "}
+                  • Status: {applicant.status}
+                </Text>
 
-              <View style={styles.tagsRow}>
-                {applicant.tags.map((tag) => (
-                  <View key={tag} style={styles.tagPill}>
-                    <Text style={styles.tagPillText}>{tag}</Text>
-                  </View>
-                ))}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.viewProfileBtn}
+                    onPress={() => onViewProfile?.(applicant.applicant_id)}
+                  >
+                    <Text style={styles.viewProfileText}>View Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.selectHireBtn}
+                    onPress={() => handleSelectHire(applicant.application_id)}
+                    disabled={applicant.status === "hired"}
+                  >
+                    <Text style={styles.selectHireText}>
+                      {applicant.status === "hired"
+                        ? "Hired ✓"
+                        : "Select & Hire"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={styles.viewProfileBtn}
-                  onPress={() => onViewProfile?.(applicant.id)}
-                >
-                  <Text style={styles.viewProfileText}>View Profile</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.selectHireBtn}
-                  onPress={() => onSelectHire?.(applicant.id)}
-                >
-                  <Text style={styles.selectHireText}>Select & Hire</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
-
-        {loadingMore && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={COLORS.accent} />
-            <Text style={styles.loadingText}>LOADING MORE APPLICANTS...</Text>
-          </View>
-        )}
       </ScrollView>
 
       {/* Bottom Tab Bar */}

@@ -1,9 +1,14 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 class ApplicationCreate(BaseModel):
     vacancy_id: int
+    portfolio_link: Optional[str] = None
+    message: Optional[str] = None
+    confirmed_availability: bool = False
+    equipment: Optional[list[str]] = []
+
 
 class ApplicationOut(BaseModel):
     id: int
@@ -11,6 +16,10 @@ class ApplicationOut(BaseModel):
     applicant_id: int
     status: str
     applied_at: datetime
+    portfolio_link: Optional[str] = None
+    message: Optional[str] = None
+    confirmed_availability: bool = False
+    equipment: Optional[list[str]] = []
 
     class Config:
         from_attributes = True
@@ -26,3 +35,6 @@ class ApplicantOut(BaseModel):
     applicant_id: int
     full_name: str
     email: str
+    portfolio_link: Optional[str] = None
+    message: Optional[str] = None
+    equipment: Optional[list[str]] = []

@@ -14,3 +14,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
     role = Column(Enum(RoleEnum), nullable=False)
+
+    bio = Column(Text, nullable=True)
+    skills = Column(ARRAY(String), nullable=True, default=[])
+    avatar_url = Column(String, nullable=True)

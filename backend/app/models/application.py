@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -11,6 +11,11 @@ class Application(Base):
     applicant_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(String, default="applied")  # applied / shortlisted / hired / rejected
     applied_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    portfolio_link = Column(String, nullable=True)
+    message = Column(Text, nullable=True)
+    confirmed_availability = Column(Boolean, default=False)
+    equipment = Column(ARRAY(String), nullable=True, default=[])
 
     vacancy = relationship("Vacancy", back_populates="applications")
 

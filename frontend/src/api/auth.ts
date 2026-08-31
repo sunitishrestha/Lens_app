@@ -17,11 +17,22 @@ export type User = {
   full_name: string;
   email: string;
   role: "hire" | "work";
+  bio?: string | null;
+  skills?: string[];
+  avatar_url?: string | null;
 };
+
 export type AuthResponse = {
   access_token: string;
   token_type: "bearer";
   user: User;
+};
+
+export type ProfileUpdatePayload = {
+  full_name?: string;
+  bio?: string;
+  skills?: string[];
+  avatar_url?: string;
 };
 
 export const loginUser = (payload: LoginPayload) =>
@@ -37,4 +48,9 @@ export const registerUser = (payload: RegisterPayload) =>
 export const getCurrentUser = (accessToken: string) =>
   apiRequest<User>("/auth/me", {
     headers: { Authorization: `Bearer ${accessToken}` },
+  });
+export const updateProfile = (payload: ProfileUpdatePayload) =>
+  apiRequest<User>("/auth/me", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });

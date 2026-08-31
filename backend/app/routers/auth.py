@@ -37,6 +37,19 @@ async def login(payload: LoginPayload, db: AsyncSession = Depends(get_db)):
     token = create_access_token({"sub": str(user.id)})
     return AuthResponse(access_token=token, user=user)
 
+@router.patch("/me", response_model=UserOut)
+def update_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    update_data = payload.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
 @router.get("/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
