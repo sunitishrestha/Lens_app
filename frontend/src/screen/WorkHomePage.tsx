@@ -79,7 +79,7 @@ export default function WorkHomepage({
 
   const handleApply = async (vacancyId: number) => {
     try {
-      await applyToVacancy(vacancyId);
+      await applyToVacancy({ vacancy_id: vacancyId });
       Alert.alert("Applied!", "Your application was submitted.");
     } catch (err) {
       Alert.alert(

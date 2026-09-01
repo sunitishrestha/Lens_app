@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy import Column, Integer, String, Enum, Text
+from sqlalchemy.dialects.postgresql import ARRAY
 from app.db.base import Base
 import enum
 

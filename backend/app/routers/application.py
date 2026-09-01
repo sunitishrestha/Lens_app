@@ -4,7 +4,7 @@ from app.database import get_db
 from app.models.application import Application
 from app.models.vacancy import Vacancy
 from app.models.user import User
-from app.schemas.application import ApplicationCreate, ApplicationOut, ApplicationStatusUpdate, ApplicantOut
+from app.schema.application import ApplicationCreate, ApplicationOut, ApplicationStatusUpdate, ApplicantOut
 from app.core.deps import get_current_user, require_role
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -26,7 +26,15 @@ def apply_to_vacancy(
     if existing:
         raise HTTPException(status_code=400, detail="You already applied to this vacancy")
 
-    application = Application(vacancy_id=payload.vacancy_id, applicant_id=current_user.id)
+    # UPDATED: now saves the extra fields sent from ApplyJobScreen.tsx
+    application = Application(
+        vacancy_id=payload.vacancy_id,
+        applicant_id=current_user.id,
+        portfolio_link=payload.portfolio_link,
+        message=payload.message,
+        confirmed_availability=payload.confirmed_availability,
+        equipment=payload.equipment,
+    )
     db.add(application)
     db.commit()
     db.refresh(application)
@@ -56,6 +64,7 @@ def applicants_for_vacancy(
         .filter(Application.vacancy_id == vacancy_id)
         .all()
     )
+    # UPDATED: now includes portfolio_link, message, equipment so the hirer can see them
     return [
         ApplicantOut(
             application_id=app.id,
@@ -64,6 +73,9 @@ def applicants_for_vacancy(
             applicant_id=user.id,
             full_name=user.full_name,
             email=user.email,
+            portfolio_link=app.portfolio_link,
+            message=app.message,
+            equipment=app.equipment,
         )
         for app, user in rows
     ]

@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.vacancy import Vacancy
 from app.models.application import Application
 from app.models.user import User
-from app.schemas.vacancy import VacancyCreate, VacancyOut
+from app.schema.vacancy import VacancyCreate, VacancyOut
 from app.core.deps import get_current_user, require_role
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])

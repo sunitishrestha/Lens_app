@@ -69,7 +69,13 @@ export default function ApplyJobScreen({
     }
     setSubmitting(true);
     try {
-      await applyToVacancy(vacancyId);
+      await applyToVacancy({
+        vacancy_id: vacancyId,
+        portfolio_link: portfolioLink || undefined,
+        message: message || undefined,
+        confirmed_availability: confirmedAvailability,
+        equipment: equipment.length > 0 ? equipment : undefined,
+      });
       Alert.alert(
         "Application submitted!",
         "The hirer will review your application.",

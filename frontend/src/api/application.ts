@@ -6,6 +6,10 @@ export type Application = {
   applicant_id: number;
   status: string;
   applied_at: string;
+  portfolio_link?: string | null;
+  message?: string | null;
+  confirmed_availability?: boolean;
+  equipment?: string[];
 };
 
 export type Applicant = {
@@ -15,12 +19,23 @@ export type Applicant = {
   applicant_id: number;
   full_name: string;
   email: string;
+  portfolio_link?: string | null;
+  message?: string | null;
+  equipment?: string[];
 };
 
-export const applyToVacancy = (vacancy_id: number) =>
+export type ApplicationCreatePayload = {
+  vacancy_id: number;
+  portfolio_link?: string;
+  message?: string;
+  confirmed_availability?: boolean;
+  equipment?: string[];
+};
+
+export const applyToVacancy = (payload: ApplicationCreatePayload) =>
   apiRequest<Application>("/applications", {
     method: "POST",
-    body: JSON.stringify({ vacancy_id }),
+    body: JSON.stringify(payload),
   });
 
 export const myApplications = () =>

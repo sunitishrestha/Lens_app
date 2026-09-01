@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import get_settings
+from app.core.config import get_settings
 from app.database import Base, engine
 from app.routers.auth import router as auth_router
-from app.routers.vacancies import router as vacancies_router
-from app.routers.applications import router as applications_router
+from app.routers.vacancy import router as vacancy_router
+from app.routers.application import router as application_router
 
 
 settings = get_settings()
@@ -23,5 +23,5 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(auth_router, prefix="/api/v1")
-app.include_router(vacancies_router, prefix="/api/v1")
-app.include_router(applications_router, prefix="/api/v1")
+app.include_router(vacancy_router, prefix="/api/v1")
+app.include_router(application_router, prefix="/api/v1")

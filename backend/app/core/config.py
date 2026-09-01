@@ -2,10 +2,10 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
-    database_url: str
-    jwt_secret_key: str
+    database_url: str = "postgresql+psycopg://joblens:joblens_dev_password@db:5432/joblens"
+    jwt_secret: str = "joblens-local-development-secret-change-before-production"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days for dev
+    access_token_expire_minutes: int = 10080  # 7 days for dev
     allowed_origins: list[str] = ["*"]
 
     class Config:

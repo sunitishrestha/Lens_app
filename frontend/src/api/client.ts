@@ -10,9 +10,21 @@ export async function apiRequest<T>(
 ): Promise<T> {
   if (!API_URL)
     throw new Error("API URL is missing. Set expo.extra.apiUrl in app.json.");
+
+  // Automatically add Authorization header if token exists
+  const token = await SecureStore.getItemAsync("access_token");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (token && !headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers,
   });
   const body: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
