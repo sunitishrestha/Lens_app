@@ -2,8 +2,10 @@ import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
 type AppExtra = { apiUrl?: string };
-const API_URL = (Constants.expoConfig?.extra as AppExtra | undefined)?.apiUrl;
 
+export const API_URL = (Constants.expoConfig?.extra as AppExtra | undefined)
+  ?.apiUrl;
+export const API_BASE_URL = API_URL?.replace(/\/api\/v1\/?$/, "") ?? "";
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},

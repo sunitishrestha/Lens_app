@@ -11,6 +11,6 @@ export type HireStackParamList = {
 
 export type WorkStackParamList = {
   WorkHome: undefined;
-  Apply: undefined;
+  WorkApply: { vacancyId: number };
   WorkProfile: undefined;
 };

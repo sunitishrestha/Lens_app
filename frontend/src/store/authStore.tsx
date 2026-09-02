@@ -10,13 +10,14 @@ type AuthState = {
   login: (response: AuthResponse) => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
+  setUser: (user: User) => void; // NEW
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accessToken: null,
   isLoading: true,
-
+  setUser: (user) => set({ user }),
   login: async (response) => {
     await SecureStore.setItemAsync("access_token", response.access_token);
     set({ user: response.user, accessToken: response.access_token });

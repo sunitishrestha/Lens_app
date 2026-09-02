@@ -26,33 +26,6 @@ interface EventItem {
   location: string;
 }
 
-const EVENTS: EventItem[] = [
-  {
-    id: "1",
-    category: "WEDDING",
-    image: "https://images.unsplash.com/photo-1519741497674-611481863552?w=700",
-    title: "Premium Black-Tie Wedding",
-    price: "$1,200",
-    location: "Chelsea, London — 5 miles away",
-  },
-  {
-    id: "2",
-    category: "COMMERCIAL",
-    image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=700",
-    title: "Luxury Tech Brand Campaign",
-    price: "$1,850",
-    location: "Shoreditch Studio — 8 miles away",
-  },
-  {
-    id: "3",
-    category: "MUSIC VIDEO",
-    image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=700",
-    title: "Indie Pop Visual EP",
-    price: "$950",
-    location: "Southbank, London — 3 miles away",
-  },
-];
-
 interface WorkHomepageProps {
   onViewDetails?: (eventId: number) => void;
   onNavigateHome?: () => void;

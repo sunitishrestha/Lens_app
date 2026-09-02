@@ -8,11 +8,15 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 import { useAuthStore } from "../store/authStore";
 import { myVacancies, Vacancy } from "../api/vacancies";
+import * as ImagePicker from "expo-image-picker";
+import { uploadAvatar } from "../api/auth";
+import { API_BASE_URL, API_URL } from "../api/client";
 
 interface HireProfileScreenProps {
   onNavigateHome?: () => void;
@@ -30,13 +34,16 @@ export default function HireProfileScreen({
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const setUser = useAuthStore((s) => s.setUser); // see note below — need to add this to the store
 
   useEffect(() => {
     myVacancies().then(setVacancies).catch(console.log);
   }, []);
-
-  const avatarUri =
-    user?.avatar_url ?? "https://randomuser.me/api/portraits/men/12.jpg";
+  const avatarUri = user?.avatar_url
+    ? `${API_BASE_URL}${user.avatar_url}`
+    : "https://api.dicebear.com/7.x/avataaars/svg?seed=" +
+      (user?.email ?? "default");
   const bio =
     user?.bio ?? "Add a studio bio to tell workers about your projects.";
 
@@ -46,7 +53,38 @@ export default function HireProfileScreen({
       { text: "Yes", onPress: logout },
     ]);
   };
+  const handlePickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Permission needed",
+        "Please allow access to your photo library.",
+      );
+      return;
+    }
 
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled) return;
+
+    setUploading(true);
+    try {
+      const updatedUser = await uploadAvatar(result.assets[0].uri);
+      setUser(updatedUser);
+    } catch (err) {
+      Alert.alert(
+        "Upload failed",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
@@ -60,8 +98,19 @@ export default function HireProfileScreen({
             <Ionicons name="videocam" size={20} color={COLORS.accent} />
             <Text style={styles.logoText}>LENSLEASE</Text>
           </View>
-          <TouchableOpacity>
-            <Feather name="menu" size={22} color={COLORS.textPrimary} />
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={handlePickAvatar}
+            disabled={uploading}
+          >
+            <Image source={{ uri: avatarUri }} style={styles.avatar} />
+            <View style={styles.verifiedBadge}>
+              {uploading ? (
+                <ActivityIndicator size="small" color={COLORS.accent} />
+              ) : (
+                <Ionicons name="camera" size={16} color={COLORS.accent} />
+              )}
+            </View>
           </TouchableOpacity>
         </View>
 

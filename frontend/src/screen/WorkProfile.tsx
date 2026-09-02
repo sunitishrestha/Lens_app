@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,14 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 import { useAuthStore } from "../store/authStore";
+import * as ImagePicker from "expo-image-picker";
+import { uploadAvatar } from "../api/auth";
+import { API_BASE_URL } from "../api/client";
 
 interface CameramanProfileScreenProps {
   onBookNow?: () => void;
@@ -30,6 +34,8 @@ export default function CameramanProfileScreen({
 }: CameramanProfileScreenProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const setUser = useAuthStore((s) => s.setUser);
+  const [uploading, setUploading] = useState(false);
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -38,10 +44,43 @@ export default function CameramanProfileScreen({
     ]);
   };
 
+  const handlePickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Permission needed",
+        "Please allow access to your photo library.",
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled) return;
+
+    setUploading(true);
+    try {
+      const updatedUser = await uploadAvatar(result.assets[0].uri);
+      setUser(updatedUser);
+    } catch (err) {
+      Alert.alert(
+        "Upload failed",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
   const name = user?.full_name ?? "Your Name";
   const skills = user?.skills && user.skills.length > 0 ? user.skills : [];
-  const avatarUri =
-    user?.avatar_url ?? "https://randomuser.me/api/portraits/lego/1.jpg"; // neutral placeholder until they upload one
+  const avatarUri = user?.avatar_url
+    ? `${API_BASE_URL}${user.avatar_url}`
+    : "https://api.dicebear.com/7.x/avataaars/svg?seed=" +
+      (user?.email ?? "default");
 
   return (
     <View style={styles.container}>
@@ -64,16 +103,20 @@ export default function CameramanProfileScreen({
 
         {/* Avatar + info */}
         <View style={styles.avatarBlock}>
-          <View style={styles.avatarWrap}>
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={handlePickAvatar}
+            disabled={uploading}
+          >
             <Image source={{ uri: avatarUri }} style={styles.avatar} />
             <View style={styles.verifiedBadge}>
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color={COLORS.accent}
-              />
+              {uploading ? (
+                <ActivityIndicator size="small" color={COLORS.accent} />
+              ) : (
+                <Ionicons name="camera" size={16} color={COLORS.accent} />
+              )}
             </View>
-          </View>
+          </TouchableOpacity>
           <Text style={styles.name}>{name}</Text>
           <View style={styles.premiumBadge}>
             <Text style={styles.premiumBadgeText}>PREMIUM MEMBER</Text>
