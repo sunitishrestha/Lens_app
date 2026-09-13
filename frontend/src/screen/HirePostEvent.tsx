@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
+import { Alert } from "react-native";
+import { createVacancy } from "../api/vacancies";
 
 interface GearGroup {
   id: string;
@@ -61,16 +63,15 @@ export interface CreateEventPayload {
 }
 
 interface HirePostEventProps {
-  onPostEvent?: (payload: CreateEventPayload) => void;
+  onPosted?: () => void;
   onCancel?: () => void;
-  onPostJob?: () => void;
   onNavigateHome?: () => void;
   onNavigatePost?: () => void;
   onNavigateProfile?: () => void;
 }
 
 export default function HirePostEvent({
-  onPostEvent,
+  onPosted,
   onCancel,
   onNavigateHome,
   onNavigatePost,
@@ -88,6 +89,7 @@ export default function HirePostEvent({
   const [peopleRequired, setPeopleRequired] = useState("1");
   const [budget, setBudget] = useState("");
   const [gearRequirements, setGearRequirements] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const toggleGear = (item: string) => {
     setGearRequirements((prev) =>
@@ -95,17 +97,40 @@ export default function HirePostEvent({
     );
   };
 
-  const handlePostEvent = () => {
-    onPostEvent?.({
-      eventType,
-      location,
-      date,
-      time,
-      peopleRequired,
-      budget,
-      gearRequirements,
-    });
-    onCancel?.();
+  const handlePostEvent = async () => {
+    if (!location.trim()) {
+      Alert.alert("Missing location", "Please enter a location for this job.");
+      return;
+    }
+    if (!budget.trim()) {
+      Alert.alert("Missing budget", "Please enter a budget for this job.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await createVacancy({
+        title: `${eventType} Shoot in ${location}`,
+        category: eventType.toUpperCase(),
+        description:
+          `Looking for ${peopleRequired} professional(s) for a ${eventType.toLowerCase()} shoot on ${date || "TBD"} at ${time || "TBD"}. ` +
+          (gearRequirements.length > 0
+            ? `Gear needed: ${gearRequirements.join(", ")}.`
+            : ""),
+        location,
+        price: `Rs ${budget}`,
+      });
+      Alert.alert("Job posted!", "Workers can now see and apply to this job.");
+      onPosted?.();
+      onCancel?.();
+    } catch (err) {
+      Alert.alert(
+        "Could not post job",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const onDateChange = (event: any, selectedDate?: Date) => {
@@ -142,13 +167,17 @@ export default function HirePostEvent({
         contentContainerStyle={{ paddingBottom: 110 }}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoRow}>
-            <Ionicons name="videocam" size={20} color={COLORS.accent} />
-            <Text style={styles.logoText}>LENSLEASE</Text>
-          </View>
-          <TouchableOpacity onPress={onCancel}>
-            <Text style={styles.cancelText}>CANCEL</Text>
+        <View>
+          <TouchableOpacity
+            style={styles.postBtn}
+            onPress={handlePostEvent}
+            activeOpacity={0.85}
+            disabled={submitting}
+          >
+            <Ionicons name="send-outline" size={16} color="#04202B" />
+            <Text style={styles.postBtnText}>
+              {submitting ? " Posting..." : " Post Event"}
+            </Text>
           </TouchableOpacity>
         </View>
 

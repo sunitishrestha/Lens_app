@@ -23,6 +23,8 @@ function HireHomeRoute({ navigation }: HireScreenProps) {
 function HirePostRoute({ navigation }: HireScreenProps) {
   return (
     <HirePostEvent
+      onCancel={() => navigation.navigate("HireHome")}
+      onPosted={() => navigation.navigate("HireHome")}
       onNavigateHome={() => navigation.navigate("HireHome")}
       onNavigatePost={() => navigation.navigate("HirePost")}
       onNavigateProfile={() => navigation.navigate("HireProfile")}
