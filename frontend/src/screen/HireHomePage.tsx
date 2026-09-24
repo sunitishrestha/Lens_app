@@ -113,6 +113,7 @@ function ApplicantRow({ avatar, name, role, tag, time }: ApplicantRowProps) {
 
 interface HireHomepageProps {
   onPostJob?: () => void;
+  onViewApplicants?: (vacancyId: number) => void;
   onNavigateHome?: () => void;
   onNavigatePost?: () => void;
   onNavigateProfile?: () => void;
@@ -120,6 +121,7 @@ interface HireHomepageProps {
 
 export default function HireHomepage({
   onPostJob,
+  onViewApplicants,
   onNavigateHome,
   onNavigatePost,
   onNavigateProfile,
@@ -220,7 +222,12 @@ export default function HireHomepage({
           </Text>
         ) : (
           vacancies.map((v) => (
-            <View key={v.id} style={styles.projectCard}>
+            <TouchableOpacity
+              key={v.id}
+              style={styles.projectCard}
+              activeOpacity={0.85}
+              onPress={() => onViewApplicants?.(v.id)}
+            >
               <View style={styles.projectBody}>
                 <View style={styles.projectTitleRow}>
                   <Text style={styles.projectTitle}>{v.title}</Text>
@@ -250,7 +257,7 @@ export default function HireHomepage({
                   </Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
 

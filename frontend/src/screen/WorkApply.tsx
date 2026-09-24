@@ -158,25 +158,6 @@ export default function ApplyJobScreen({
           />
         </View>
 
-        {/* CV upload */}
-        <Text style={styles.fieldLabel}>CV / RESUME (PDF)</Text>
-        <TouchableOpacity
-          style={styles.submitBtn}
-          onPress={handleSubmit}
-          activeOpacity={0.85}
-          disabled={submitting}
-        >
-          <Text style={styles.submitText}>
-            {submitting ? "Submitting..." : "Submit Application"}
-          </Text>
-          <Ionicons
-            name="arrow-forward"
-            size={18}
-            color="#04202B"
-            style={{ marginLeft: 8 }}
-          />
-        </TouchableOpacity>
-
         {/* Message */}
         <Text style={styles.fieldLabel}>MESSAGE TO HIRER</Text>
         <TextInput
@@ -249,8 +230,11 @@ export default function ApplyJobScreen({
           style={styles.submitBtn}
           onPress={handleSubmit}
           activeOpacity={0.85}
+          disabled={submitting}
         >
-          <Text style={styles.submitText}>Submit Application</Text>
+          <Text style={styles.submitText}>
+            {submitting ? "Submitting..." : "Submit Application"}
+          </Text>
           <Ionicons
             name="arrow-forward"
             size={18}

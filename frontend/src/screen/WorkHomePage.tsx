@@ -50,17 +50,17 @@ export default function WorkHomepage({
       .finally(() => setLoading(false));
   }, []);
 
-  const handleApply = async (vacancyId: number) => {
-    try {
-      await applyToVacancy({ vacancy_id: vacancyId });
-      Alert.alert("Applied!", "Your application was submitted.");
-    } catch (err) {
-      Alert.alert(
-        "Could not apply",
-        err instanceof Error ? err.message : "Please try again.",
-      );
-    }
-  };
+  // const handleApply = async (vacancyId: number) => {
+  //   try {
+  //     await applyToVacancy({ vacancy_id: vacancyId });
+  //     Alert.alert("Applied!", "Your application was submitted.");
+  //   } catch (err) {
+  //     Alert.alert(
+  //       "Could not apply",
+  //       err instanceof Error ? err.message : "Please try again.",
+  //     );
+  //   }
+  // };
 
   return (
     <View style={styles.container}>
@@ -189,10 +189,7 @@ export default function WorkHomepage({
                 </Text>
                 <TouchableOpacity
                   style={styles.viewDetailsBtn}
-                  onPress={() => {
-                    onViewDetails?.(event.id);
-                    handleApply(event.id);
-                  }}
+                  onPress={() => onViewDetails?.(event.id)}
                 >
                   <Text style={styles.viewDetailsText}>Apply Now</Text>
                 </TouchableOpacity>
