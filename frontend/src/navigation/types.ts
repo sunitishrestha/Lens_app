@@ -8,6 +8,7 @@ export type HireStackParamList = {
   HirePost: undefined;
   HireProfile: undefined;
   HireApplicants: { vacancyId: number };
+  WorkerProfileView: { applicantId: number };
 };
 
 export type WorkStackParamList = {

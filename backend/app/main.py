@@ -6,6 +6,9 @@ from app.routers.auth import router as auth_router
 from app.routers.vacancy import router as vacancy_router
 from app.routers.application import router as application_router
 from fastapi.staticfiles import StaticFiles
+from app.models.notification import Notification
+from app.routers.notification import router as notification_router
+
 import os
 
 
@@ -33,3 +36,4 @@ def health_check() -> dict[str, str]:
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(vacancy_router, prefix="/api/v1")
 app.include_router(application_router, prefix="/api/v1")
+app.include_router(notification_router, prefix="/api/v1")

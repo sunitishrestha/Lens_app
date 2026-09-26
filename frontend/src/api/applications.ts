@@ -52,3 +52,16 @@ export const updateApplicationStatus = (
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
+
+export type HiredJob = {
+  application_id: number;
+  vacancy_id: number;
+  vacancy_title: string;
+  vacancy_location: string;
+  vacancy_price: string;
+  status: string;
+  applied_at: string;
+};
+
+export const getMyHiredJobs = () =>
+  apiRequest<HiredJob[]>("/applications/me/hired");

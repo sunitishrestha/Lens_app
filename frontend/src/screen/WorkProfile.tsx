@@ -21,7 +21,8 @@ interface CameramanProfileScreenProps {
   onBookNow?: () => void;
   onMessage?: () => void;
   onNavigateHome?: () => void;
-  onNavigateApply?: () => void;
+  onNavigateNotifications?: () => void;
+
   onNavigateProfile?: () => void;
 }
 
@@ -29,7 +30,7 @@ export default function CameramanProfileScreen({
   onBookNow,
   onMessage,
   onNavigateHome,
-  onNavigateApply,
+  onNavigateNotifications,
   onNavigateProfile,
 }: CameramanProfileScreenProps) {
   const user = useAuthStore((s) => s.user);
@@ -167,9 +168,9 @@ export default function CameramanProfileScreen({
       <View style={styles.tabBar}>
         <TabItem icon="home-outline" label="Home" onPress={onNavigateHome} />
         <TabItem
-          icon="briefcase-outline"
-          label="My Jobs"
-          onPress={onNavigateApply}
+          icon="notifications-outline"
+          label="Notifications"
+          onPress={onNavigateNotifications}
         />
         <TabItem
           icon="person"

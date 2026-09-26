@@ -113,3 +113,6 @@ export const uploadAvatar = async (imageUri: string): Promise<User> => {
     throw new Error("Network request failed. Check your internet connection.");
   }
 };
+
+export const getApplicantProfile = (applicantId: number) =>
+  apiRequest<User>(`/applications/applicant/${applicantId}`);

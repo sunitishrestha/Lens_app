@@ -12,7 +12,7 @@ import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 import { useEffect, useState } from "react";
 import { getVacancy, Vacancy } from "../api/vacancies";
-import { applyToVacancy } from "../api/application";
+import { applyToVacancy } from "../api/applications";
 import { Alert } from "react-native";
 
 const EQUIPMENT_OPTIONS = [

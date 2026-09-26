@@ -5,63 +5,94 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   StyleSheet,
   StatusBar,
-  ImageBackground,
   Alert,
 } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
+
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 import { useAuthStore } from "../store/authStore";
 import { listVacancies, Vacancy } from "../api/vacancies";
-import { applyToVacancy } from "../api/application";
+import { getMyNotifications, markNotificationRead } from "../api/notifications";
 
-interface EventItem {
-  id: string;
-  category: string;
-  image: string;
-  title: string;
-  price: string;
-  location: string;
-}
+import WorkNotifications from "../screen/WorkNotifications";
 
 interface WorkHomepageProps {
   onViewDetails?: (eventId: number) => void;
   onNavigateHome?: () => void;
-  onNavigateApply?: () => void;
   onNavigateProfile?: () => void;
+  onNavigateNotifications?: () => void;
 }
 
 export default function WorkHomepage({
   onViewDetails,
   onNavigateHome,
-  onNavigateApply,
+  onNavigateNotifications,
   onNavigateProfile,
 }: WorkHomepageProps) {
   const user = useAuthStore((s) => s.user);
+
   const [events, setEvents] = useState<Vacancy[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Controls whether the notification screen is displayed
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // --------------------------------------------------
+  // Load available jobs
+  // --------------------------------------------------
   useEffect(() => {
     listVacancies()
       .then(setEvents)
-      .catch((err) => console.log("Failed to load vacancies:", err))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        console.log("Failed to load vacancies:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
-  // const handleApply = async (vacancyId: number) => {
-  //   try {
-  //     await applyToVacancy({ vacancy_id: vacancyId });
-  //     Alert.alert("Applied!", "Your application was submitted.");
-  //   } catch (err) {
-  //     Alert.alert(
-  //       "Could not apply",
-  //       err instanceof Error ? err.message : "Please try again.",
-  //     );
-  //   }
-  // };
+  // --------------------------------------------------
+  // Load unread notifications
+  // --------------------------------------------------
+  useEffect(() => {
+    getMyNotifications()
+      .then((notifs) => {
+        const unread = notifs.filter((n) => !n.is_read);
 
+        unread.forEach((n) => {
+          Alert.alert("Notification", n.message, [
+            {
+              text: "OK",
+              onPress: () => {
+                markNotificationRead(n.id);
+              },
+            },
+          ]);
+        });
+      })
+      .catch((err) => {
+        console.log("Failed to load notifications:", err);
+      });
+  }, []);
+
+  // --------------------------------------------------
+  // SHOW NOTIFICATION SCREEN
+  // --------------------------------------------------
+  if (showNotifications) {
+    return (
+      <WorkNotifications
+        onNavigateHome={() => setShowNotifications(false)}
+        onNavigateNotifications={() => setShowNotifications(true)}
+        onNavigateProfile={onNavigateProfile}
+      />
+    );
+  }
+
+  // --------------------------------------------------
+  // WORKER HOME PAGE
+  // --------------------------------------------------
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
@@ -70,31 +101,34 @@ export default function WorkHomepage({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 110 }}
       >
-        {/* Header */}
+        {/* ================= HEADER ================= */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <View style={styles.logoBox}>
               <Ionicons name="videocam" size={16} color={COLORS.accent} />
             </View>
+
             <Text style={styles.logoText}>LensLease</Text>
           </View>
+
           <TouchableOpacity>
             <Feather name="menu" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
 
-        {/* Welcome */}
+        {/* ================= WELCOME ================= */}
         <View style={styles.welcomeBlock}>
           <Text style={styles.welcomeLabel}>
             WELCOME BACK, {(user?.full_name ?? "THERE").toUpperCase()}
           </Text>
+
           <Text style={styles.welcomeTitle}>
             Ready for your{" "}
             <Text style={{ color: COLORS.accent }}>next shoot?</Text>
           </Text>
         </View>
 
-        {/* Status card */}
+        {/* ================= STATUS CARD ================= */}
         <View style={styles.statusCard}>
           <Ionicons
             name="star"
@@ -102,15 +136,17 @@ export default function WorkHomepage({
             color={COLORS.accent}
             style={{ marginRight: 10 }}
           />
+
           <View>
             <Text style={styles.statusLabel}>Status</Text>
             <Text style={styles.statusValue}>Elite DP</Text>
           </View>
         </View>
 
-        {/* Search bar */}
+        {/* ================= SEARCH BAR ================= */}
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+
           <TextInput
             placeholder="Search by gear or location..."
             placeholderTextColor={COLORS.textSecondary}
@@ -118,7 +154,7 @@ export default function WorkHomepage({
           />
         </View>
 
-        {/* Jobs near you + filter */}
+        {/* ================= JOBS NEAR YOU ================= */}
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.jobsNearBtn}>
             <Ionicons
@@ -126,57 +162,81 @@ export default function WorkHomepage({
               size={16}
               color={COLORS.textPrimary}
             />
+
             <Text style={styles.jobsNearText}>Jobs near you</Text>
           </TouchableOpacity>
+
           <TouchableOpacity style={styles.filterBtn}>
             <Ionicons name="options-outline" size={20} color="#04202B" />
           </TouchableOpacity>
         </View>
 
-        {/* Available Events header */}
+        {/* ================= AVAILABLE EVENTS ================= */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Available Events</Text>
+
           <View style={styles.sectionHeaderRight}>
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>{events.length} New</Text>
             </View>
+
             <TouchableOpacity>
               <Text style={styles.seeAll}>See all activity</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Event cards */}
+        {/* ================= EVENT CARDS ================= */}
         {loading ? (
-          <Text style={{ color: COLORS.textSecondary, paddingHorizontal: 20 }}>
+          <Text
+            style={{
+              color: COLORS.textSecondary,
+              paddingHorizontal: 20,
+            }}
+          >
             Loading jobs...
           </Text>
         ) : events.length === 0 ? (
-          <Text style={{ color: COLORS.textSecondary, paddingHorizontal: 20 }}>
+          <Text
+            style={{
+              color: COLORS.textSecondary,
+              paddingHorizontal: 20,
+            }}
+          >
             No open jobs right now. Check back soon.
           </Text>
         ) : (
           events.map((event) => (
             <View key={event.id} style={styles.eventCard}>
               <View style={styles.eventBody}>
+                {/* Event title and price */}
                 <View style={styles.eventTitleRow}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
+
                   <Text style={styles.eventPrice}>
                     {event.price}
+
                     <Text style={styles.eventPriceUnit}>/day</Text>
                   </Text>
                 </View>
+
+                {/* Category */}
                 <View style={styles.categoryTag}>
                   <Text style={styles.categoryTagText}>{event.category}</Text>
                 </View>
+
+                {/* Location */}
                 <View style={styles.eventLocationRow}>
                   <Ionicons
                     name="location-outline"
                     size={13}
                     color={COLORS.textSecondary}
                   />
+
                   <Text style={styles.eventLocation}> {event.location}</Text>
                 </View>
+
+                {/* Applicant count */}
                 <Text
                   style={{
                     color: COLORS.textSecondary,
@@ -187,6 +247,8 @@ export default function WorkHomepage({
                   {event.applicant_count} applicant
                   {event.applicant_count === 1 ? "" : "s"} so far
                 </Text>
+
+                {/* Apply button */}
                 <TouchableOpacity
                   style={styles.viewDetailsBtn}
                   onPress={() => onViewDetails?.(event.id)}
@@ -199,14 +261,26 @@ export default function WorkHomepage({
         )}
       </ScrollView>
 
-      {/* Bottom Tab Bar */}
+      {/* ================= BOTTOM TAB BAR ================= */}
       <View style={styles.tabBar}>
+        {/* HOME */}
         <TabItem icon="grid" label="Feed" active onPress={onNavigateHome} />
+
+        {/* NOTIFICATIONS */}
         <TabItem
-          icon="briefcase-outline"
-          label="My Job"
-          onPress={onNavigateApply}
+          icon="notifications"
+          label="Notifications"
+          active={false}
+          onPress={() => {
+            setShowNotifications(true);
+
+            // If the parent navigation is also available,
+            // you can remove this line if you don't need it.
+            // onNavigateNotifications?.();
+          }}
         />
+
+        {/* PROFILE */}
         <TabItem
           icon="person-outline"
           label="Profile"
@@ -216,6 +290,10 @@ export default function WorkHomepage({
     </View>
   );
 }
+
+// ==================================================
+// TAB ITEM
+// ==================================================
 
 interface TabItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -232,15 +310,31 @@ function TabItem({ icon, label, active, onPress }: TabItemProps) {
         size={22}
         color={active ? COLORS.accent : COLORS.textSecondary}
       />
-      <Text style={[styles.tabLabel, active && { color: COLORS.accent }]}>
+
+      <Text
+        style={[
+          styles.tabLabel,
+          active && {
+            color: COLORS.accent,
+          },
+        ]}
+      >
         {label}
       </Text>
     </TouchableOpacity>
   );
 }
 
+// ==================================================
+// STYLES
+// ==================================================
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -249,7 +343,12 @@ const styles = StyleSheet.create({
     paddingTop: 55,
     paddingBottom: SPACING.md,
   },
-  logoRow: { flexDirection: "row", alignItems: "center" },
+
+  logoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   logoBox: {
     width: 26,
     height: 26,
@@ -259,9 +358,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  logoText: { color: COLORS.textPrimary, fontSize: 17, fontWeight: "700" },
-  welcomeBlock: { paddingHorizontal: SPACING.lg, marginTop: 10 },
-  welcomeLabel: { color: COLORS.textSecondary, fontSize: 12, letterSpacing: 1 },
+
+  logoText: {
+    color: COLORS.textPrimary,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+
+  welcomeBlock: {
+    paddingHorizontal: SPACING.lg,
+    marginTop: 10,
+  },
+
+  welcomeLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+
   welcomeTitle: {
     color: COLORS.textPrimary,
     fontSize: 26,
@@ -269,6 +383,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     lineHeight: 32,
   },
+
   statusCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -280,13 +395,19 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     padding: SPACING.md,
   },
-  statusLabel: { color: COLORS.textSecondary, fontSize: 11 },
+
+  statusLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+  },
+
   statusValue: {
     color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: "600",
     marginTop: 2,
   },
+
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -299,17 +420,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     height: 48,
   },
+
   searchInput: {
     flex: 1,
     color: COLORS.textPrimary,
     marginLeft: 8,
     fontSize: 14,
   },
+
   actionRow: {
     flexDirection: "row",
     marginHorizontal: SPACING.lg,
     marginTop: SPACING.md,
   },
+
   jobsNearBtn: {
     flex: 1,
     flexDirection: "row",
@@ -322,12 +446,14 @@ const styles = StyleSheet.create({
     height: 48,
     marginRight: 10,
   },
+
   jobsNearText: {
     color: COLORS.textPrimary,
     fontSize: 13,
     fontWeight: "500",
     marginLeft: 6,
   },
+
   filterBtn: {
     width: 48,
     height: 48,
@@ -336,6 +462,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -344,8 +471,18 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     marginBottom: SPACING.md,
   },
-  sectionTitle: { color: COLORS.textPrimary, fontSize: 18, fontWeight: "700" },
-  sectionHeaderRight: { flexDirection: "row", alignItems: "center" },
+
+  sectionTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+
+  sectionHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   newBadge: {
     backgroundColor: COLORS.badgeBlueBg,
     paddingHorizontal: 10,
@@ -353,12 +490,19 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
     marginRight: 10,
   },
+
   newBadgeText: {
     color: COLORS.badgeBlueText,
     fontSize: 11,
     fontWeight: "600",
   },
-  seeAll: { color: COLORS.accent, fontSize: 12, fontWeight: "500" },
+
+  seeAll: {
+    color: COLORS.accent,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+
   eventCard: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -368,7 +512,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     overflow: "hidden",
   },
-  eventImage: { width: "100%", height: 170, justifyContent: "flex-start" },
+
   categoryTag: {
     backgroundColor: "rgba(10,15,30,0.75)",
     alignSelf: "flex-start",
@@ -377,18 +521,24 @@ const styles = StyleSheet.create({
     margin: 10,
     borderRadius: 6,
   },
+
   categoryTagText: {
     color: COLORS.textPrimary,
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
-  eventBody: { padding: SPACING.md },
+
+  eventBody: {
+    padding: SPACING.md,
+  },
+
   eventTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
+
   eventTitle: {
     color: COLORS.textPrimary,
     fontSize: 16,
@@ -397,18 +547,30 @@ const styles = StyleSheet.create({
     marginRight: 8,
     lineHeight: 21,
   },
-  eventPrice: { color: COLORS.accent, fontSize: 16, fontWeight: "700" },
+
+  eventPrice: {
+    color: COLORS.accent,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
   eventPriceUnit: {
     color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: "400",
   },
+
   eventLocationRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 8,
   },
-  eventLocation: { color: COLORS.textSecondary, fontSize: 12 },
+
+  eventLocation: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+
   viewDetailsBtn: {
     backgroundColor: COLORS.cardAlt,
     borderWidth: 1,
@@ -418,11 +580,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: SPACING.md,
   },
+
   viewDetailsText: {
     color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: "600",
   },
+
   tabBar: {
     position: "absolute",
     bottom: 0,
@@ -435,6 +599,15 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 26,
   },
-  tabItem: { flex: 1, alignItems: "center" },
-  tabLabel: { color: COLORS.textSecondary, fontSize: 11, marginTop: 4 },
+
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  tabLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: 4,
+  },
 });

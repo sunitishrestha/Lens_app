@@ -9,6 +9,7 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
@@ -16,7 +17,7 @@ import {
   applicantsForVacancy,
   updateApplicationStatus,
   Applicant,
-} from "../api/application";
+} from "../api/applications";
 import { getVacancy, Vacancy } from "../api/vacancies";
 
 interface HireJobApplicantProps {
@@ -52,18 +53,34 @@ export default function HireJobapplicat({
     return matchesSearch;
   });
 
-  const handleSelectHire = async (applicationId: number) => {
-    try {
-      await updateApplicationStatus(applicationId, "hired");
-      setApplicants((prev) =>
-        prev.map((a) =>
-          a.application_id === applicationId ? { ...a, status: "hired" } : a,
-        ),
-      );
-      onSelectHire?.(applicationId);
-    } catch (err) {
-      console.log("Failed to update status:", err);
-    }
+  const handleSelectHire = (applicationId: number, applicantName: string) => {
+    Alert.alert(
+      "Confirm Hire",
+      `Are you sure you want to hire ${applicantName}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, Hire",
+          onPress: async () => {
+            try {
+              await updateApplicationStatus(applicationId, "hired");
+              setApplicants((prev) =>
+                prev.map((a) =>
+                  a.application_id === applicationId
+                    ? { ...a, status: "hired" }
+                    : a,
+                ),
+              );
+            } catch (err) {
+              Alert.alert(
+                "Failed",
+                err instanceof Error ? err.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -178,7 +195,12 @@ export default function HireJobapplicat({
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.selectHireBtn}
-                    onPress={() => handleSelectHire(applicant.application_id)}
+                    onPress={() =>
+                      handleSelectHire(
+                        applicant.application_id,
+                        applicant.full_name,
+                      )
+                    }
                     disabled={applicant.status === "hired"}
                   >
                     <Text style={styles.selectHireText}>

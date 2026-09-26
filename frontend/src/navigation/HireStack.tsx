@@ -6,6 +6,7 @@ import HireJobApplicant from "../screen/HireJobapplicant";
 import { useAuthStore } from "../store/authStore";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { HireStackParamList } from "./types";
+import WorkerProfileView from "../screen/WorkerProfileView";
 
 const Stack = createNativeStackNavigator<HireStackParamList>();
 
@@ -52,8 +53,30 @@ function HireProfileRoute({ navigation }: HireScreenProps) {
   );
 }
 
-function HireApplicantsRoute({ route }: HireApplicantsRouteProps) {
-  return <HireJobApplicant vacancyId={route.params.vacancyId} />;
+function HireApplicantsRoute({
+  navigation,
+  route,
+}: HireScreenProps & HireApplicantsRouteProps) {
+  return (
+    <HireJobApplicant
+      vacancyId={route.params.vacancyId}
+      onViewProfile={(applicantId) =>
+        navigation.navigate("WorkerProfileView", { applicantId })
+      }
+    />
+  );
+}
+
+function WorkerProfileRoute({
+  navigation,
+  route,
+}: NativeStackScreenProps<HireStackParamList, "WorkerProfileView">) {
+  return (
+    <WorkerProfileView
+      applicantId={route.params.applicantId}
+      onBack={() => navigation.goBack()}
+    />
+  );
 }
 
 export default function HireStack() {
@@ -63,6 +86,7 @@ export default function HireStack() {
       <Stack.Screen name="HirePost" component={HirePostRoute} />
       <Stack.Screen name="HireProfile" component={HireProfileRoute} />
       <Stack.Screen name="HireApplicants" component={HireApplicantsRoute} />
+      <Stack.Screen name="WorkerProfileView" component={WorkerProfileRoute} />
     </Stack.Navigator>
   );
 }
