@@ -22,7 +22,6 @@ interface CameramanProfileScreenProps {
   onMessage?: () => void;
   onNavigateHome?: () => void;
   onNavigateNotifications?: () => void;
-
   onNavigateProfile?: () => void;
 }
 

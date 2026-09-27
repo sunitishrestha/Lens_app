@@ -22,13 +22,11 @@ interface WorkHomepageProps {
   onViewDetails?: (eventId: number) => void;
   onNavigateHome?: () => void;
   onNavigateProfile?: () => void;
-  onNavigateNotifications?: () => void;
 }
 
 export default function WorkHomepage({
   onViewDetails,
   onNavigateHome,
-  onNavigateNotifications,
   onNavigateProfile,
 }: WorkHomepageProps) {
   const user = useAuthStore((s) => s.user);
@@ -54,7 +52,7 @@ export default function WorkHomepage({
   }, []);
 
   // --------------------------------------------------
-  // Load unread notifications
+  // Load unread notifications (shown as alerts on app open)
   // --------------------------------------------------
   useEffect(() => {
     getMyNotifications()
@@ -264,20 +262,19 @@ export default function WorkHomepage({
       {/* ================= BOTTOM TAB BAR ================= */}
       <View style={styles.tabBar}>
         {/* HOME */}
-        <TabItem icon="grid" label="Feed" active onPress={onNavigateHome} />
+        <TabItem
+          icon="grid"
+          label="Feed"
+          active={!showNotifications}
+          onPress={onNavigateHome}
+        />
 
         {/* NOTIFICATIONS */}
         <TabItem
           icon="notifications"
           label="Notifications"
-          active={false}
-          onPress={() => {
-            setShowNotifications(true);
-
-            // If the parent navigation is also available,
-            // you can remove this line if you don't need it.
-            // onNavigateNotifications?.();
-          }}
+          active={showNotifications}
+          onPress={() => setShowNotifications(true)}
         />
 
         {/* PROFILE */}

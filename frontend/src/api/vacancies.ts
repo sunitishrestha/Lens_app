@@ -33,3 +33,6 @@ export const myVacancies = () => apiRequest<Vacancy[]>("/vacancies/mine");
 
 export const getVacancy = (id: number) =>
   apiRequest<Vacancy>(`/vacancies/${id}`);
+
+export const deleteVacancy = (vacancyId: number) =>
+  apiRequest<void>(`/vacancies/${vacancyId}`, { method: "DELETE" });

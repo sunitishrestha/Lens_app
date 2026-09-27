@@ -15,4 +15,5 @@ export type WorkStackParamList = {
   WorkHome: undefined;
   WorkApply: { vacancyId: number };
   WorkProfile: undefined;
+  WorkNotifications: undefined;
 };

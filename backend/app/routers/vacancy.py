@@ -52,3 +52,23 @@ def get_vacancy(vacancy_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Vacancy not found")
     count = db.query(func.count(Application.id)).filter(Application.vacancy_id == v.id).scalar()
     return VacancyOut(**v.__dict__, applicant_count=count)
+
+from app.models.application import Application
+
+@router.delete("/{vacancy_id}", status_code=204)
+def delete_vacancy(
+    vacancy_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("hire")),
+):
+    vacancy = db.query(Vacancy).filter(Vacancy.id == vacancy_id).first()
+    if not vacancy:
+        raise HTTPException(status_code=404, detail="Vacancy not found")
+    if vacancy.hirer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your vacancy")
+
+    # Delete related applications first to avoid FK/NULL constraint errors
+    db.query(Application).filter(Application.vacancy_id == vacancy_id).delete()
+    db.delete(vacancy)
+    db.commit()
+    return None

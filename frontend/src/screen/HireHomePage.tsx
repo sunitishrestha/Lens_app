@@ -13,6 +13,8 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../store/authStore";
 import { myVacancies, Vacancy } from "../api/vacancies";
+import { deleteVacancy } from "../api/vacancies";
+import { Alert } from "react-native";
 
 // ---- Replace these with your real image URIs / require() assets later ----
 const PROJECT_IMG_1 =
@@ -137,6 +139,32 @@ export default function HireHomepage({
       .finally(() => setLoading(false));
   }, []);
 
+  const handleDelete = (vacancyId: number, title: string) => {
+    Alert.alert(
+      "Delete this job?",
+      `"${title}" will be permanently removed, along with any applications to it.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteVacancy(vacancyId);
+              setVacancies((prev) => prev.filter((v) => v.id !== vacancyId));
+            } catch (err) {
+              console.log("DELETE ERROR FULL:", err);
+              Alert.alert(
+                "Could not delete",
+                err instanceof Error ? err.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const activeJobs = vacancies.filter((v) => v.status === "open").length;
   const totalApplicants = vacancies.reduce(
     (sum, v) => sum + v.applicant_count,
@@ -235,6 +263,17 @@ export default function HireHomepage({
                     text={v.status === "open" ? "RECRUITING" : "CLOSED"}
                     variant={v.status === "open" ? "blue" : "orange"}
                   />
+                  <TouchableOpacity
+                    onPress={() => handleDelete(v.id, v.title)}
+                    style={{ marginLeft: 8 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={COLORS.textSecondary}
+                    />
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.projectMetaRow}>
                   <Ionicons
