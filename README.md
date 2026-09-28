@@ -1,261 +1,416 @@
 # JobLens
 
-JobLens is a TypeScript mobile app for Expo Go, with a Python FastAPI backend and PostgreSQL database. It supports creating an account, logging in, receiving a JWT access token, persisting the session across app restarts with role-based navigation (`hire` vs `work`), hirers posting job vacancies, workers browsing and applying to them, and hirers seeing how many people applied to each job.
+JobLens is a job board for camera and film professionals, built as a mobile app (Expo Go) with a Python FastAPI backend and a PostgreSQL database.
 
-## Project structure
+There are two kinds of accounts:
+
+- **Hire** (producers/studios): post jobs, see who applied, view applicant profiles, hire someone, delete a job.
+- **Work** (camera professionals): browse open jobs, fill in an application form, see "you've been hired" notifications, manage a profile with a photo.
+
+This README is written so that you can come back after a break and understand **what exists, why it was built that way, how to run it, and what went wrong before**.
+
+---
+
+## 1. Feature status
+
+| Feature                                                           | Status                                                                                        |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Register / login / JWT / `GET /auth/me`                           | ✅ Confirmed working                                                                          |
+| Session survives closing the app (SecureStore + `restoreSession`) | ✅ Confirmed working                                                                          |
+| Role-based navigation (hire vs work)                              | ✅ Confirmed working                                                                          |
+| Hire posts a job from the app (`HirePostEvent`)                   | ✅ Confirmed working (job appears on the Work dashboard)                                      |
+| Work dashboard lists real open jobs                               | ✅ Confirmed working                                                                          |
+| Worker submits application form (portfolio, message, equipment)   | ✅ Confirmed working (applicant shows on the hire side)                                       |
+| Hire dashboard shows real job list and applicant counts           | ✅ Confirmed working                                                                          |
+| Profile screens show the logged-in user's real data               | ✅ Confirmed working                                                                          |
+| Profile photo upload from phone gallery (stored on server + DB)   | ✅ Confirmed working                                                                          |
+| Hire taps "View Profile" on an applicant (`WorkerProfileView`)    | 🟡 Code + route registered, re-test after last fix                                            |
+| "Select & Hire" confirmation popup + notification row created     | 🟡 Written, needs end-to-end test                                                             |
+| Work "Notifications" tab listing jobs you were hired for          | 🟡 Written, needs end-to-end test                                                             |
+| Delete a job (backend + trash icon)                               | 🟡 Backend delete works after fix; confirmation popup still needs checking (see Known issues) |
+| Refresh tokens, password reset, social login                      | ❌ Not built                                                                                  |
+| Real "New Applicants" feed on the hire dashboard                  | ❌ Still hardcoded demo rows                                                                  |
+
+---
+
+## 2. How the app works (big picture)
+
+```text
+HIRE user                                   WORK user
+---------                                   ---------
+Post a Job  ──POST /vacancies──►  vacancies table  ◄──GET /vacancies──  Work dashboard lists it
+                                                                            │
+                                                                     tap "Apply Now"
+                                                                            ▼
+                                   applications table  ◄──POST /applications──  Application form
+      │
+Tap the job card ──GET /applications/vacancy/{id}──► applicant list (name, email, status)
+      │
+"View Profile" ──GET /applications/applicant/{id}──► that worker's bio/skills/photo
+      │
+"Select & Hire" ──PATCH /applications/{id}/status = hired──► also inserts a row in notifications
+                                                                            │
+                                            Work "Notifications" tab ◄──GET /applications/me/hired
+```
+
+Key idea: **the database is the single source of truth.** The hirer's dashboard and the worker's feed both read the same `vacancies` table, which is why deleting a job removes it from both.
+
+---
+
+## 3. Project structure
 
 ```text
 JobLens/
-├── frontend/             # Expo SDK 54 + React Native + TypeScript app
-│   ├── App.tsx              # Restores session on boot, renders AppNavigator
-│   ├── app.json             # Expo settings and phone-to-API address
+├── docker-compose.yml          # db (Postgres) + api (FastAPI) containers
+├── frontend/                   # Expo SDK 54 + React Native + TypeScript
+│   ├── App.tsx                 # restoreSession() on boot, renders AppNavigator
+│   ├── app.json                # expo.extra.apiUrl = phone-to-API address
 │   └── src/
-│       ├── api/              # Typed FastAPI requests (auth.ts, client.ts, vacancies.ts, application.ts)
-│       ├── store/             # Zustand auth store (authStore.tsx)
+│       ├── api/
+│       │   ├── client.ts       # apiRequest<T>(), API_URL, API_BASE_URL, adds Bearer token
+│       │   ├── auth.ts         # login, register, me, updateProfile, uploadAvatar, getApplicantProfile
+│       │   ├── vacancies.ts    # createVacancy, listVacancies, myVacancies, getVacancy, deleteVacancy
+│       │   ├── applications.ts # applyToVacancy, myApplications, applicantsForVacancy,
+│       │   │                   #   updateApplicationStatus, getMyHiredJobs
+│       │   └── notifications.ts# getMyNotifications, markNotificationRead
+│       ├── store/authStore.tsx # Zustand: user, login, logout, restoreSession, setUser
 │       ├── navigation/         # AppNavigator, AuthStack, HireStack, WorkStack, types.ts
-│       └── screen/            # Login, registration, hire/work dashboards, profile
-├── backend/              # FastAPI application
-│   └── app/
-│       ├── routers/         # auth, vacancies, applications
-│       ├── models/           # user, vacancy, application (SQLAlchemy)
-│       ├── schema/           # auth, vacancy, application (Pydantic)
-│       ├── core/              # security.py (hashing/JWT), deps.py (auth dependencies)
-│       └── database.py        # DB engine/session setup
-└── docker-compose.yml    # PostgreSQL and FastAPI containers
+│       ├── constants/theme.ts  # COLORS, SPACING, RADIUS
+│       └── screen/
+│           ├── LoginPage.tsx, RegisterPage.tsx
+│           ├── HireHomePage.tsx, HirePostEvent.tsx, HireJobapplicant.tsx,
+│           │   HireProfile.tsx, WorkerProfileView.tsx
+│           └── WorkHomePage.tsx, WorkApply.tsx, WorkNotifications.tsx, WorkProfile.tsx
+└── backend/
+    ├── Dockerfile, requirements.txt, .env (NOT committed), .env.example
+    ├── uploads/avatars/        # uploaded profile photos (mounted volume, NOT committed)
+    └── app/
+        ├── main.py             # creates app, CORS, /uploads static mount, includes routers
+        ├── database.py         # engine, Base, get_db
+        ├── core/               # config.py, security.py (hash + JWT), deps.py (get_current_user, require_role)
+        ├── models/             # user, vacancy, application, notification (SQLAlchemy)
+        ├── schema/             # auth, vacancy, application, notification (Pydantic)
+        └── routers/            # auth, vacancy, application, notification
 ```
 
-## What is complete
+Note the folder is called `schema` (singular) and router files are singular (`vacancy.py`, `application.py`). Python imports must match these names exactly (see the troubleshooting log).
 
-### Backend — Auth
+---
 
-- FastAPI API with Swagger documentation at `/docs`.
-- PostgreSQL database via Docker.
-- `users` table with full name, email, password hash, role (`hire` | `work`), and creation time.
-- Passwords are hashed with Argon2 (`pwdlib`); raw passwords are never stored.
-- JWT authentication tokens are created on login and validated on protected routes via a `get_current_user` dependency (`app/core/deps.py`).
-- `require_role("hire")` / `require_role("work")` dependency restricts endpoints by role — e.g. only `hire` users can post a vacancy, only `work` users can apply to one.
-- CORS is enabled for development.
+## 4. Tech stack and why
 
-### Backend — Vacancies & Applications (built this session)
+| Piece          | Choice                                    | Why                                                                  |
+| -------------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| API            | FastAPI                                   | Fast to write, automatic Swagger docs at `/docs` for testing         |
+| ORM            | SQLAlchemy 2 (sync `Session`) + `psycopg` | Simple relational mapping to Postgres                                |
+| Validation     | Pydantic schemas                          | The contract between backend responses and frontend TypeScript types |
+| Passwords      | `pwdlib` + Argon2                         | Modern password hashing; plain passwords are never stored            |
+| Tokens         | `PyJWT` (HS256)                           | Stateless login; the token holds only `sub` = user id and `exp`      |
+| Database       | PostgreSQL 16 in Docker                   | Real relational DB with foreign keys                                 |
+| Mobile         | Expo SDK 54, React Native, TypeScript     | Runs in Expo Go on a phone                                           |
+| State          | Zustand                                   | Tiny global store for the logged-in user                             |
+| Navigation     | React Navigation native-stack             | Screens and typed route params                                       |
+| Secure storage | `expo-secure-store`                       | Keeps the JWT encrypted on the device                                |
+| Images         | `expo-image-picker`                       | Choose a profile photo from the gallery                              |
 
-This is the core "job board" logic connecting hirers and workers:
+---
 
-- **`app/models/vacancy.py`** — `Vacancy` table: title, category, description, location, price, status (`open`/`closed`), linked to the hirer via `hirer_id` (foreign key to `users.id`).
-- **`app/models/application.py`** — `Application` table: links a `vacancy_id` to an `applicant_id` (the worker), with a `status` field (`applied` / `shortlisted` / `hired` / `rejected`). A unique constraint on `(vacancy_id, applicant_id)` stops the same worker from applying twice to the same job.
-- **`app/schema/vacancy.py`** and **`app/schema/application.py`** — Pydantic request/response contracts, including an `applicant_count` field computed per vacancy so the hire dashboard can show live numbers without a separate request.
-- **Routers:**
+## 5. Backend in detail
 
-  | Method  | Route                               | Who    | Purpose                                                                       |
-  | ------- | ----------------------------------- | ------ | ----------------------------------------------------------------------------- |
-  | `POST`  | `/api/v1/vacancies`                 | `hire` | Create a new job posting                                                      |
-  | `GET`   | `/api/v1/vacancies`                 | anyone | Public feed of all open vacancies (used by Work dashboard)                    |
-  | `GET`   | `/api/v1/vacancies/mine`            | `hire` | This hirer's own posted jobs, with applicant counts                           |
-  | `GET`   | `/api/v1/vacancies/{id}`            | anyone | Single vacancy detail                                                         |
-  | `POST`  | `/api/v1/applications`              | `work` | Apply to a vacancy (blocks duplicate applications)                            |
-  | `GET`   | `/api/v1/applications/me`           | `work` | A worker's own list of applications                                           |
-  | `GET`   | `/api/v1/applications/vacancy/{id}` | `hire` | See everyone who applied to one of your own vacancies (with their name/email) |
-  | `PATCH` | `/api/v1/applications/{id}/status`  | `hire` | Update an applicant's status (shortlist / hire / reject)                      |
+### 5.1 Database tables
 
-- Ownership checks are enforced server-side: a hirer can only view/manage applicants for vacancies **they themselves** posted (checked via `vacancy.hirer_id == current_user.id`), not any hirer's jobs.
+`Base.metadata.create_all()` runs at startup and creates any table that does not exist yet.
 
-### Frontend — State & Navigation
+**users**
+`id`, `email` (unique), `password_hash`, `full_name`, `role` (`hire` or `work`), `bio` (text), `skills` (text array), `avatar_url` (relative path such as `/uploads/avatars/abc.jpg`), `created_at`.
 
-- **Session state managed globally with Zustand** (`src/store/authStore.tsx`):
-  - `login(response)` — stores the JWT in `expo-secure-store`, sets `user` in state.
-  - `logout()` — clears the token, resets state.
-  - `restoreSession()` — on app boot, reads the token and calls `GET /auth/me` to re-hydrate the logged-in user, so sessions survive closing/reopening the app.
-- **Navigation via React Navigation** (`@react-navigation/native` + `@react-navigation/native-stack`):
-  - `AppNavigator.tsx` reads `user` from the store and renders `AuthStack`, `HireStack`, or `WorkStack` based on `user.role`, wrapped in one `NavigationContainer`.
-  - Screens use `navigation.navigate(...)` (typed via `NativeStackScreenProps` and a shared `AuthStackParamList` in `src/navigation/types.ts`) instead of manually passed-in callback props.
+**vacancies**
+`id`, `hirer_id` (FK to users), `title`, `category`, `description`, `location`, `price` (string such as `Rs 5000`), `status` (`open` or `closed`), `created_at`.
 
-### Frontend — Vacancies & Applications (built this session)
+**applications**
+`id`, `vacancy_id` (FK), `applicant_id` (FK), `status` (`applied`, `shortlisted`, `hired`, `rejected`), `applied_at`, `portfolio_link`, `message`, `confirmed_availability` (bool), `equipment` (text array).
+Unique constraint on (`vacancy_id`, `applicant_id`) so a worker cannot apply twice to the same job.
 
-- **`src/api/vacancies.ts`** — typed functions: `createVacancy`, `listVacancies`, `myVacancies`, `getVacancy`.
-- **`src/api/application.ts`** — typed functions: `applyToVacancy`, `myApplications`, `applicantsForVacancy`, `updateApplicationStatus`.
-- **Hire dashboard (`HireHomepage.tsx`)** now:
-  - Shows the real logged-in hirer's name (`user.full_name` from the auth store) instead of static text.
-  - Fetches `myVacancies()` on load and replaces the hardcoded "12 active jobs / 148 applicants" stat cards with real counts computed from the response.
-  - Replaces the two hardcoded demo project cards with a live list of the hirer's own posted vacancies, each showing real title, status (open/closed), location, and applicant count.
-  - Tapping a posted vacancy opens the applicant review screen, where the hirer can search applicants and select a worker for hire.
-- **Work dashboard (`WorkHomepage.tsx`)** now:
-  - Shows the real logged-in worker's name instead of the hardcoded `userName = "Alex"` default prop.
-  - Fetches `listVacancies()` (the public open-jobs feed) instead of using the hardcoded `EVENTS` array.
-  - Tapping a job card opens the application form with the selected vacancy details.
-  - Each card shows a live applicant count pulled from the backend.
-- **Worker application form (`WorkApply.tsx`)** now:
-  - Collects a portfolio link, message, availability confirmation, and equipment selections.
-  - Sends the completed form to `POST /api/v1/applications` and shows a success/error alert.
-  - Prevents submission until the worker confirms full availability and disables the submit button while sending.
-- **Hire applicant review (`HireJobapplicant.tsx`)** now:
-  - Loads the selected vacancy and its applications from the backend.
-  - Displays each applicant's name, email, application date, and status.
-  - Allows the hirer to update an applicant to `hired`.
+**notifications**
+`id`, `user_id` (FK), `message`, `is_read`, `created_at`.
 
-## What has already been run
+### 5.2 IMPORTANT: adding columns to existing tables
 
-```powershell
-# Backend
-docker compose config
-docker compose up --build -d
-docker compose ps
+`create_all()` only creates **missing tables**. It never adds columns to a table that already exists. When we added new columns, they had to be added by hand in `psql`:
 
-# Verified the database schema directly
-docker exec -it joblens-db-1 psql -U joblens -d joblens
-# \dt
-# SELECT * FROM users;
-# (after this session's backend work, \dt should also show vacancies and applications)
+```sql
+-- profile fields on users
+ALTER TABLE users ADD COLUMN bio TEXT;
+ALTER TABLE users ADD COLUMN skills TEXT[];
+ALTER TABLE users ADD COLUMN avatar_url VARCHAR;
 
-# Frontend dependencies
-npx expo install zustand @react-navigation/native @react-navigation/native-stack react-native-screens react-native-safe-area-context
-npx tsc --noEmit
+-- extra application form fields
+ALTER TABLE applications ADD COLUMN portfolio_link VARCHAR;
+ALTER TABLE applications ADD COLUMN message TEXT;
+ALTER TABLE applications ADD COLUMN confirmed_availability BOOLEAN DEFAULT FALSE;
+ALTER TABLE applications ADD COLUMN equipment TEXT[];
 ```
 
-The API was tested successfully with this flow:
+If you rebuild on a fresh database these are created automatically. Long term, switch to Alembic migrations.
 
-1. `GET /health` returned `{"status":"ok"}`.
-2. A test user registered, logged in, and `GET /api/v1/auth/me` returned that user.
-3. Confirmed via `psql` that registered users appear in `users` with Argon2-hashed passwords (never plaintext).
+### 5.3 API routes
 
-**Not yet re-verified after this session's vacancy/application backend code was added** — before relying on it, run through this checklist:
+All routes are prefixed with `/api/v1`. "Who" is enforced by `require_role(...)` in `core/deps.py`.
 
-1. `docker compose up --build -d` (rebuild so the new models/routers are picked up).
-2. In `/docs`, log in as a `hire` user → `POST /api/v1/vacancies` → create a job.
-3. `GET /api/v1/vacancies` → confirm it appears in the public feed.
-4. Log in as a `work` user → open the job from the worker dashboard → submit the application form.
-5. Back as the hire user → `GET /api/v1/applications/vacancy/{vacancy_id}` → confirm the applicant shows with name/email.
-6. `GET /api/v1/vacancies/mine` as the hire user → confirm `applicant_count` is now `1`.
-7. In the hire dashboard, tap the posted job → confirm the applicant review screen shows the new application and its status.
-8. In `psql`, run `\dt` and confirm `vacancies` and `applications` tables exist; `SELECT * FROM vacancies;` / `SELECT * FROM applications;` to see the rows.
+**Auth**
 
-Only once all of that passes in Swagger/psql should the frontend screens be trusted end-to-end on a phone.
+| Method | Route             | Who       | Purpose                                       |
+| ------ | ----------------- | --------- | --------------------------------------------- |
+| POST   | `/auth/register`  | anyone    | Create a `hire` or `work` account             |
+| POST   | `/auth/login`     | anyone    | Returns `access_token` and the user           |
+| GET    | `/auth/me`        | logged in | Current user                                  |
+| PATCH  | `/auth/me`        | logged in | Update name, bio, skills                      |
+| POST   | `/auth/me/avatar` | logged in | Upload profile photo (jpg/png/webp, max 5 MB) |
 
-## Prerequisites
+**Vacancies**
+
+| Method | Route             | Who          | Purpose                                          |
+| ------ | ----------------- | ------------ | ------------------------------------------------ |
+| POST   | `/vacancies`      | hire         | Create a job                                     |
+| GET    | `/vacancies`      | anyone       | Public feed of open jobs (Work dashboard)        |
+| GET    | `/vacancies/mine` | hire         | Own jobs with `applicant_count` (Hire dashboard) |
+| GET    | `/vacancies/{id}` | anyone       | One job                                          |
+| DELETE | `/vacancies/{id}` | hire (owner) | Delete a job and its applications                |
+
+**Applications**
+
+| Method | Route                          | Who          | Purpose                                                          |
+| ------ | ------------------------------ | ------------ | ---------------------------------------------------------------- |
+| POST   | `/applications`                | work         | Apply with portfolio link, message, availability, equipment      |
+| GET    | `/applications/me`             | work         | Own applications                                                 |
+| GET    | `/applications/me/hired`       | work         | Jobs I was hired for, with title/location/price                  |
+| GET    | `/applications/vacancy/{id}`   | hire (owner) | Applicants for one job                                           |
+| GET    | `/applications/applicant/{id}` | hire         | An applicant's profile, only if they applied to one of your jobs |
+| PATCH  | `/applications/{id}/status`    | hire (owner) | Set `shortlisted` / `hired` / `rejected`                         |
+
+There is also a leftover stub `GET /applications` that returns a placeholder message. It does nothing useful and can be deleted.
+
+**Notifications**
+
+| Method | Route                      | Who       | Purpose                        |
+| ------ | -------------------------- | --------- | ------------------------------ |
+| GET    | `/notifications`           | logged in | My notifications, newest first |
+| PATCH  | `/notifications/{id}/read` | logged in | Mark one as read               |
+
+### 5.4 Backend concepts worth remembering
+
+- **Ownership checks.** Being a `hire` user is not enough. Every hire endpoint also checks `vacancy.hirer_id == current_user.id`, so one hirer cannot see or change another hirer's jobs.
+- **Applicant privacy.** `GET /applications/applicant/{id}` returns 403 unless that person applied to one of _your_ jobs.
+- **Hiring creates a notification.** Inside the status endpoint, when the new status is `hired`, a row is inserted into `notifications` for that worker.
+- **Deleting a job.** The route deletes the job's applications first, then the vacancy. Without this, SQLAlchemy tried to set `applications.vacancy_id` to NULL and the database rejected it (NOT NULL violation, HTTP 500).
+- **Avatar upload.** The file is saved to `uploads/avatars/<uuid>.<ext>`, the relative URL is stored in `users.avatar_url`, and `main.py` mounts `/uploads` as static files so the phone can load the image. The old file is deleted when a new one is uploaded.
+- **The JWT `sub` must be a plain user id.** Call `create_access_token(user.id)`. Passing a dict like `{"sub": ...}` gets stringified and breaks every protected route.
+- **Backend code is copied into the Docker image at build time.** After any backend edit you must run `docker compose up --build -d`.
+
+---
+
+## 6. Frontend in detail
+
+### 6.1 Talking to the API
+
+`src/api/client.ts` exports `apiRequest<T>(path, options)`. It prepends `API_URL`, sets `Content-Type: application/json`, reads the JWT from SecureStore and adds `Authorization: Bearer <token>`, then turns any error body's `detail` into a thrown `Error`.
+
+- `API_URL` comes from `app.json` (`expo.extra.apiUrl`, ends with `/api/v1`).
+- `API_BASE_URL` is the same address without `/api/v1`. It is used to build image URLs like `http://192.168.1.69:8000/uploads/avatars/x.jpg`.
+- `uploadAvatar` in `auth.ts` calls `fetch` directly with `FormData`. It must **not** go through `apiRequest`, because forcing `Content-Type: application/json` would break multipart uploads.
+
+### 6.2 Auth state
+
+`authStore.tsx` (Zustand) holds `user`, `accessToken`, `isLoading` and the actions `login`, `logout`, `restoreSession`, `setUser`. `setUser` lets a screen update the user immediately, for example after a new avatar upload.
+
+### 6.3 Navigation
+
+`AppNavigator` shows `AuthStack`, `HireStack` or `WorkStack` depending on `user` and `user.role`.
+
+| Stack     | Routes                                                                                                                 |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| AuthStack | `Login`, `Register`                                                                                                    |
+| HireStack | `HireHome`, `HirePost`, `HireProfile`, `HireApplicants` (param `vacancyId`), `WorkerProfileView` (param `applicantId`) |
+| WorkStack | `WorkHome`, `WorkApply` (param `vacancyId`), `WorkProfile`, `WorkNotifications`                                        |
+
+Rules that caused bugs before:
+
+1. Every screen must be **registered** as a `<Stack.Screen>` and its name and params must exist in `types.ts`.
+2. Screens are wrapped by small `...Route` functions that turn `navigation.navigate(...)` into the plain callback props the screens expect (`onNavigateHome`, `onViewProfile`, ...).
+3. `WorkHomePage` shows `WorkNotifications` using local state (`showNotifications`) rather than the stack, so the Notifications tab works even without navigation wiring.
+
+### 6.4 Screens
+
+| Screen                    | What it does                                                                              | API calls                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| LoginPage / RegisterPage  | Sign in / sign up                                                                         | `loginUser`, `registerUser`                                     |
+| HireHomePage              | Stats, list of my jobs, trash icon to delete, tap card to open applicants                 | `myVacancies`, `deleteVacancy`                                  |
+| HirePostEvent             | Form that becomes a vacancy (title built from type and city, price as `Rs <budget>`)      | `createVacancy`                                                 |
+| HireJobapplicant          | Applicants for one job, search by name, "View Profile", "Select & Hire" with confirmation | `getVacancy`, `applicantsForVacancy`, `updateApplicationStatus` |
+| WorkerProfileView         | Read-only worker profile for the hirer                                                    | `getApplicantProfile`                                           |
+| HireProfile / WorkProfile | Own profile, tap avatar to pick a photo, logout                                           | `uploadAvatar`, `myVacancies` (hire only)                       |
+| WorkHomePage              | Open jobs feed, "Apply Now" opens the form, unread notifications shown as alerts on load  | `listVacancies`, `getMyNotifications`, `markNotificationRead`   |
+| WorkApply                 | Application form (portfolio link, message, availability, equipment)                       | `getVacancy`, `applyToVacancy`                                  |
+| WorkNotifications         | List of jobs I was hired for; empty state if none                                         | `getMyHiredJobs`                                                |
+
+The default avatar is a generated cartoon from DiceBear (seeded by email), so nobody sees a stranger's photo before uploading their own.
+
+---
+
+## 7. Running the project
+
+### Prerequisites
 
 - Docker Desktop running
-- Node.js **20.19 or newer**
-- Expo Go SDK 54 on your Android phone
-- Computer and phone connected to the same Wi-Fi
+- Node.js 20.19 or newer
+- **Expo Go on your phone must be the SDK 54 build.** If Expo Go auto-updates to a newer SDK you will get "Project is incompatible with this version of Expo Go". Fix: uninstall Expo Go, install the SDK 54 APK from `https://expo.dev/go?sdkVersion=54&platform=android&device=true`, and turn off auto-update for Expo Go in the Play Store.
+- Phone and computer on the same Wi-Fi
 
-## Run the backend
-
-From the project root:
+### Backend
 
 ```powershell
 cd C:\Users\sophi\OneDrive\Desktop\JobLens
 docker compose up --build -d
-```
-
-Check its status:
-
-```powershell
 docker compose ps
 Invoke-RestMethod http://localhost:8000/health
 ```
 
-Open the interactive API documentation in a browser:
+Swagger docs: `http://localhost:8000/docs`
 
-```text
-http://localhost:8000/docs
+`docker-compose.yml` should give the `api` service this volume so uploaded photos survive rebuilds:
+
+```yaml
+volumes:
+  - ./backend/uploads:/app/uploads
 ```
 
-Check the database directly if needed:
+Stop with `docker compose down`. Never use `docker compose down -v` unless you want to erase the database.
 
-```powershell
-docker exec -it joblens-db-1 psql -U joblens -d joblens
-```
-
-Inside `psql`, useful commands while developing:
-
-```sql
-\pset pager off      -- stop results from paginating and hiding rows
-\x                    -- expanded display, one column per line (easier to read)
-\dt                   -- list all tables
-\d+ vacancies         -- full column details for one table
-SELECT * FROM users;
-SELECT * FROM vacancies;
-SELECT * FROM applications;
-```
-
-Stop the backend when you are finished:
-
-```powershell
-docker compose down
-```
-
-`docker compose down` stops the services but keeps your PostgreSQL data volume. Do not use `docker compose down -v` unless you intentionally want to erase the local database.
-
-## Run the frontend in Expo Go
-
-Open a new terminal and run:
+### Frontend
 
 ```powershell
 cd C:\Users\sophi\OneDrive\Desktop\JobLens\frontend
 npm install
 npx expo install --fix
 npx tsc --noEmit
-npx expo start --tunnel
+npx expo start --clear
 ```
 
-Then scan the QR code with Expo Go. For quicker iteration during development, `npx expo start --web` also works in a browser.
+Scan the QR code with Expo Go. If a change does not show up, fully close Expo Go and rescan.
 
-### Important: API address for your phone
+### Phone-to-API address
 
-Expo Go runs on the phone, so `localhost` means the phone itself—not your computer. The frontend is currently configured to call:
-
-```text
-http://192.168.1.69:8000/api/v1
-```
-
-This address is in `frontend/app.json`:
+`localhost` on a phone means the phone itself. `frontend/app.json` therefore holds your computer's Wi-Fi address:
 
 ```json
-"extra": {
-  "apiUrl": "http://192.168.1.69:8000/api/v1"
-}
+"extra": { "apiUrl": "http://192.168.1.69:8000/api/v1" }
 ```
 
-If your Wi-Fi address changes, find the new address and update `apiUrl`:
+If your Wi-Fi IP changes (check `ipconfig`, Wi-Fi adapter, IPv4), update it. Quick test from the phone browser: `http://<your-ip>:8000/health` should show `{"status":"ok"}`.
+
+---
+
+## 8. Testing checklist
+
+**In Swagger (`/docs`) first, then in the app:**
+
+1. Register one `hire` and one `work` user. Log in, click **Authorize**, paste the token (no "Bearer").
+2. As hire: `POST /vacancies`, then `GET /vacancies/mine`.
+3. As work: `GET /vacancies` shows the job. `POST /applications` with `{"vacancy_id": 1, "confirmed_availability": true}`.
+4. As hire: `GET /applications/vacancy/1` shows the applicant. `GET /vacancies/mine` shows `applicant_count: 1`.
+5. As hire: `GET /applications/applicant/{worker_id}` returns the profile. For a worker who did _not_ apply you should get 403.
+6. As hire: `PATCH /applications/{id}/status` with `{"status": "hired"}`. As work: `GET /notifications` and `GET /applications/me/hired` show it.
+7. As hire: `DELETE /vacancies/1` returns 204. In `psql` both the vacancy and its applications are gone.
+8. In the app, repeat the same flow with two accounts (or two devices).
+
+Useful `psql` checks:
 
 ```powershell
-ipconfig
+docker exec -it joblens-db-1 psql -U joblens -d joblens
 ```
 
-Use the IPv4 Address listed under **Wireless LAN adapter Wi-Fi**. Keep the phone and computer on the same Wi-Fi. If Windows Firewall asks, allow access to port `8000`.
+```sql
+\pset pager off
+\dt
+SELECT id, email, role, avatar_url FROM users;
+SELECT * FROM vacancies;
+SELECT * FROM applications;
+SELECT * FROM notifications;
+```
 
-## Test from the app
+---
 
-1. Start the backend.
-2. Start Expo with the frontend command above.
-3. Scan the QR code in Expo Go.
-4. Tap **Sign Up**, choose a role, provide a name, valid email, password of at least eight characters, and accept the terms.
-5. Return to Login and sign in using the new account.
-6. Close and reopen the app — you should stay logged in (session restored from SecureStore via `restoreSession()`).
-7. As a `hire` account: use the Post a Job flow to create a vacancy, and see it appear on your dashboard with a real applicant count.
-8. As a `work` account: browse the open jobs feed and apply to one; confirm the applicant count on the hirer's side goes up.
-9. Log out from the profile screen and confirm you're returned to the Login screen.
+## 9. Troubleshooting log (problems we hit and how they were fixed)
 
-## Current limitations / next work
+| Symptom                                                                        | Real cause                                                                                           | Fix                                                           |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `Property 'AppNavigator' doesn't exist`                                        | `App.tsx` used the component without importing it                                                    | Add the import                                                |
+| Everything red in navigation files                                             | `zustand` and React Navigation were not installed, and `AuthStack/HireStack/WorkStack` did not exist | `npx expo install ...`, create the stack files                |
+| `Property 'onRegister' is missing`                                             | Screens used callback props, React Navigation passes `navigation`                                    | Use `navigation.navigate("Register")`                         |
+| `Type annotations can only be used in TypeScript files`                        | Screen was still `.jsx`                                                                              | Rename to `.tsx`                                              |
+| `avatar_url / bio / skills` not on type                                        | Fields were added to `AuthResponse` instead of `User`                                                | Put them on `User` in `auth.ts`                               |
+| **500 on every protected route** (`invalid literal for int(): "{'sub': '1'}"`) | `login` called `create_access_token({"sub": ...})`                                                   | Call `create_access_token(user.id)`                           |
+| Two profile photos shown                                                       | Header and avatar block both rendered an `<Image>`                                                   | Keep one tappable avatar                                      |
+| Upload failed / "Network request failed"                                       | API container had crashed (nothing listening on port 8000)                                           | `docker compose ps`, then `docker compose logs api --tail 50` |
+| Apply gave "Method Not Allowed"                                                | `main.py` and the frontend imported the wrong module names (plural vs singular)                      | Make imports match the real filenames exactly                 |
+| Container exits with `ModuleNotFoundError: app.routers.notification`           | File was accidentally named `notification,py` (comma)                                                | Rename to `notification.py`                                   |
+| `No module named 'app.schema.user'`                                            | `UserOut` lives in `app.schema.auth`                                                                 | Fix the import                                                |
+| `NAVIGATE ... was not handled by any navigator`                                | Screen defined but not registered as `<Stack.Screen>`                                                | Register it and add it to `types.ts`                          |
+| `NativeStackScreenProps requires 1 to 3 type arguments`                        | A missing `<` in a generic type                                                                      | Add the `<`                                                   |
+| Delete job returned 500 (`NotNullViolation` on `applications.vacancy_id`)      | ORM tried to null out child rows                                                                     | Delete applications first, then the vacancy                   |
+| Warning: `MediaTypeOptions` deprecated                                         | Old expo-image-picker API                                                                            | Use `mediaTypes: ["images"]`                                  |
+| "Project is incompatible with this version of Expo Go"                         | Phone's Expo Go updated to SDK 57, project is SDK 54                                                 | Install the SDK 54 Expo Go APK, disable auto-update           |
 
-- Only an access token is issued — there is no refresh token yet, so the session expires when the JWT expires (no silent refresh).
-- Password reset, Google login, and Apple login buttons are visual only.
-- The Hire dashboard's "New Applicants" feed (recent applicants across _all_ of a hirer's jobs) is not built yet — currently only per-vacancy applicant lists are available via `applicantsForVacancy(vacancyId)`.
-- Vacancy posts have no image/photo field yet — job cards are currently text-only.
-- Database tables are created automatically at startup via `Base.metadata.create_all()`; production should use Alembic migrations instead.
-- `JWT_SECRET` and CORS settings are development values. Change them before deployment.
+### Debug cheat sheet
 
-## Useful files
+```powershell
+docker compose ps                                  # is the api container running?
+docker compose logs api --tail 80                  # why did it crash?
+docker compose up --build                          # run in foreground to watch startup errors
+docker compose build --no-cache api                # rule out stale Docker cache
+docker compose run --rm api ls -la app/routers/    # what files really exist inside the image?
+dir backend\app\routers                            # check for typos in filenames (e.g. comma vs dot)
+findstr /s /i "api/application" *.ts *.tsx         # find wrong frontend import paths (run in frontend\src)
+npx tsc --noEmit                                   # TypeScript errors in your own code
+```
 
-- `frontend/package.json` — Expo SDK 54 dependencies (zustand, react-navigation)
-- `frontend/app.json` — application name and API address
-- `frontend/src/api/auth.ts` — login and registration requests
-- `frontend/src/api/vacancies.ts` — create/list/get vacancy requests
-- `frontend/src/api/application.ts` — apply/list/update application requests
-- `frontend/src/api/client.ts` — typed fetch wrapper with auth token injection
-- `frontend/src/store/authStore.tsx` — global auth state (login/logout/restoreSession)
-- `frontend/src/navigation/AppNavigator.tsx` — role-based root navigator
-- `frontend/src/navigation/types.ts` — shared navigation param list types
-- `backend/.env` — local API and database configuration
-- `backend/app/main.py` — FastAPI entry point
-- `backend/app/models/vacancy.py`, `backend/app/models/application.py` — job board data models
-- `backend/app/routers/vacancy.py`, `backend/app/routers/application.py` — job board API routes
-- `docker-compose.yml` — containers to run locally
+Habits that would have saved time:
+
+- After every backend change, rebuild the container and check `docker compose ps`.
+- Test a new endpoint in Swagger before wiring the screen.
+- If an edit "does nothing", suspect a typo in a filename or import path first.
+- Paste whole files when debugging; small fragments hide duplicated or missing code.
+
+---
+
+## 10. Known issues and next steps
+
+**Known issues**
+
+- The trash icon on a job card sits inside a card that is itself tappable. The confirmation popup ("Delete this job? Cancel / Delete") is in the code, but if deleting ever happens without the popup, restructure so only the title area navigates and the trash button is a sibling.
+- `WorkProfile.tsx` still uses the deprecated `ImagePicker.MediaTypeOptions.Images`. Change it to `["images"]` like `HireProfile.tsx`.
+- `HireHomePage.tsx` "New Applicants" still shows three hardcoded demo people.
+- `WorkHomePage.tsx` shows a hardcoded "Elite DP" status; `WorkProfile.tsx` shows a hardcoded "PREMIUM MEMBER" badge and a placeholder equipment card.
+- Unread notifications appear as alert popups each time the Work home screen loads until they are dismissed.
+- `HireHomePage.tsx` contains a duplicated `useEffect` (harmless, remove one).
+- The leftover `GET /applications` stub route in `application.py` can be deleted.
+
+**Next steps**
+
+- Real "recent applicants across all my jobs" feed on the hire dashboard.
+- Edit-profile screen (name, bio, skills) using `PATCH /auth/me`.
+- Equipment and portfolio as real database tables.
+- Unread-count badge on the Notifications tab; later, real push notifications.
+- Refresh tokens and silent re-login.
+- Alembic migrations instead of manual `ALTER TABLE`.
+- Image and date fields on vacancies.
+- Tests (pytest + httpx) and a deployed backend.
+
+---
+
+## 11. Before pushing to GitHub
+
+- Do **not** commit `backend/.env` (JWT secret, database password) or `backend/uploads/`. Keep `backend/.env.example` as the template.
+- Make sure `.gitignore` covers `node_modules/`, `.expo/`, `backend/.env`, `backend/uploads/`.
+- Change `JWT_SECRET` and the CORS settings before any real deployment; the current values are for development.
+- Run `npx tsc --noEmit` and confirm `docker compose ps` shows both containers up before you commit.
